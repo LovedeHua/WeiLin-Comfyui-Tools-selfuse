@@ -64,10 +64,98 @@ function removeNodeBySeed(seed) {
     globalNodeList.splice(index, 1);
   }
 }
+
+function getCacheVersion() {
+  return encodeURIComponent(global_randomID);
+}
+
+function setWidgetValue(widget, value) {
+  if (!widget) return;
+
+  widget.value = value;
+  if (widget.element) {
+    widget.element.value = value;
+    widget.element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    widget.element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+  }
+
+  app.graph?.setDirtyCanvas?.(true, true);
+}
+
+function getWidgetValue(widget, fallbackElement) {
+  if (widget?.value !== undefined && widget.value !== null) {
+    return widget.value;
+  }
+
+  return fallbackElement?.value ?? "";
+}
+
+function openNodeLoraManager(seed) {
+  if (!seed) return;
+
+  window.postMessage({
+    type: 'weilin_prompt_ui_openLoraManager_addLora_stack_node',
+    seed,
+  }, '*');
+}
+
+function hideWidgetElement(widget) {
+  if (!widget?.element) return;
+
+  const elements = [widget.element];
+  const parentElement = widget.element.parentElement;
+  if (
+    parentElement &&
+    parentElement !== document.body &&
+    parentElement !== document.documentElement &&
+    parentElement.children.length <= 1
+  ) {
+    elements.push(parentElement);
+  }
+
+  elements.forEach(element => {
+    element.style.display = 'none';
+    element.style.visibility = 'hidden';
+    element.style.pointerEvents = 'none';
+    element.style.userSelect = 'none';
+    element.style.width = '0px';
+    element.style.height = '0px';
+    element.style.minWidth = '0px';
+    element.style.minHeight = '0px';
+    element.style.maxWidth = '0px';
+    element.style.maxHeight = '0px';
+    element.style.overflow = 'hidden';
+  });
+}
+
+function stopLiteGraphEvent(event) {
+  event.stopPropagation();
+}
+
+function protectDomWidgetEvents(element) {
+  if (!element) return;
+
+  [
+    'pointerdown',
+    'pointerup',
+    'mousedown',
+    'mouseup',
+    'click',
+    'dblclick',
+    'contextmenu',
+    'wheel',
+    'touchstart',
+    'touchend',
+  ].forEach(eventName => {
+    element.addEventListener(eventName, stopLiteGraphEvent, { capture: true });
+  });
+}
+
 function initWindow() {
+  const cacheVersion = getCacheVersion();
   var script = document.createElement('script');
   // 设置 script 元素的属性
-  script.src = './weilin/prompt_ui/webjs'; // 注意确保这里的路径是正确的，并且服务器正在运行。
+  script.src = './weilin/prompt_ui/webjs?v=' + cacheVersion; // 注意确保这里的路径是正确的，并且服务器正在运行。
   script.type = 'text/javascript';
   script.async = true;
   document.head.appendChild(script);
@@ -77,13 +165,13 @@ function initWindow() {
   // 设置 link 元素的属性
   link.rel = 'stylesheet';
   link.type = 'text/css';
-  link.href = './weilin/prompt_ui/file/style.css'; // 确保这里的路径是正确的，并且服务器正在运行。
+  link.href = './weilin/prompt_ui/file/style.css?v=' + cacheVersion; // 确保这里的路径是正确的，并且服务器正在运行。
   document.head.appendChild(link);
 
   // loraStack 脚本载入
   var script = document.createElement('script');
   // 设置 script 元素的属性
-  script.src = './weilin/prompt_ui/file/lora_stack.js'; // 注意确保这里的路径是正确的，并且服务器正在运行。
+  script.src = './weilin/prompt_ui/file/lora_stack.js?v=' + cacheVersion; // 注意确保这里的路径是正确的，并且服务器正在运行。
   script.type = 'text/javascript';
   script.async = true;
   document.head.appendChild(script);
@@ -92,7 +180,7 @@ function initWindow() {
   // 设置 link 元素的属性
   link.rel = 'stylesheet';
   link.type = 'text/css';
-  link.href = './weilin/prompt_ui/file/lora_stack.css'; // 确保这里的路径是正确的，并且服务器正在运行。
+  link.href = './weilin/prompt_ui/file/lora_stack.css?v=' + cacheVersion; // 确保这里的路径是正确的，并且服务器正在运行。
   document.head.appendChild(link);
 }
 initWindow()
@@ -131,7 +219,7 @@ app.registerExtension({
           const widgetItem = this.widgets[index];
           if (widgetItem.name == "positive") {
             let thisInputElement = widgetItem.element
-            // thisInputElement.readOnly = true
+            thisInputElement.readOnly = false
             nodeTextAreaList[0] = thisInputElement
           } else if (widgetItem.name == "lora_str") {
             let thisInputElement = widgetItem.element
@@ -152,6 +240,12 @@ app.registerExtension({
           }
         }
 
+        const positiveWidget = this.widgets.find(w => w.name === "positive");
+        const loraWidget = this.widgets.find(w => w.name === "lora_str");
+        const tempWidget = this.widgets.find(w => w.name === "temp_str");
+        const tempLoraWidget = this.widgets.find(w => w.name === "temp_lora_str");
+        const randomTemplateWidget = this.widgets.find(w => w.name === "random_template");
+
         // Lora Stack 创建可视化节点
         if (nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
           await createLoraStackWidget(this, thisNodeSeed,nodeTextAreaList[3]);
@@ -161,13 +255,16 @@ app.registerExtension({
 
         if (nodeData.name === "WeiLinPromptUI" ||
           nodeData.name === "WeiLinPromptUIWithoutLora") {
-          globalNodeList.push({ seed: thisNodeSeed, text: nodeTextAreaList[0].value, id: this.id })
+          globalNodeList.push({ seed: thisNodeSeed, text: getWidgetValue(positiveWidget, nodeTextAreaList[0]), id: this.id })
 
           const textarea = nodeTextAreaList[0];
 
           textarea.addEventListener('input', (event) => {
             const newValue = event.target.value;
-            updateNodeTextBySeed(newValue);
+            if (positiveWidget) {
+              positiveWidget.value = newValue;
+            }
+            updateNodeTextBySeed(thisNodeSeed, newValue);
             window.parent.postMessage({ type: 'weilin_prompt_ui_update_node_list_info', nodeList: globalNodeList }, '*')
           });
         }
@@ -257,21 +354,25 @@ app.registerExtension({
             randomID = generateUUID();
             // console.log("register====>",randomID)
             let jsonData = {
-              prompt: nodeTextAreaList[0].value,
+              prompt: getWidgetValue(positiveWidget, nodeTextAreaList[0]),
               lora: [],
               temp_prompt: {},
               temp_lora: {},
             }
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1].value.length > 0) {
-              jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
+            const loraStr = getWidgetValue(loraWidget, nodeTextAreaList[1]);
+            const tempPromptStr = getWidgetValue(tempWidget, nodeTextAreaList[2]);
+            const tempLoraStr = getWidgetValue(tempLoraWidget, nodeTextAreaList[3]);
+
+            if (nodeData.name === "WeiLinPromptUI" && loraStr.length > 0) {
+              jsonData.lora = JSON.parse(loraStr);
             }
 
-            if (nodeTextAreaList[2].value.length > 0) {
-              jsonData.temp_prompt = JSON.parse(nodeTextAreaList[2].value)
+            if (tempPromptStr.length > 0) {
+              jsonData.temp_prompt = JSON.parse(tempPromptStr)
             }
 
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3].value.length > 0) {
-              jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
+            if (nodeData.name === "WeiLinPromptUI" && tempLoraStr.length > 0) {
+              jsonData.temp_lora = JSON.parse(tempLoraStr)
             }
 
             const data = JSON.stringify(jsonData)
@@ -291,12 +392,15 @@ app.registerExtension({
               lora: [],
               temp_lora: {},
             }
-            if (nodeTextAreaList[1].value.length > 0) {
-              jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
+            const loraStr = getWidgetValue(loraWidget, nodeTextAreaList[1]);
+            const tempLoraStr = getWidgetValue(tempLoraWidget, nodeTextAreaList[3]);
+
+            if (loraStr.length > 0) {
+              jsonData.lora = JSON.parse(loraStr);
             }
 
-            if (nodeTextAreaList[3].value.length > 0) {
-              jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
+            if (tempLoraStr.length > 0) {
+              jsonData.temp_lora = JSON.parse(tempLoraStr)
             }
 
             const data = JSON.stringify(jsonData)
@@ -312,28 +416,28 @@ app.registerExtension({
 
             const jsonReponse = JSON.parse(event.data.data)
             // console.log(jsonReponse)
-            nodeTextAreaList[0].value = jsonReponse.prompt;
+            setWidgetValue(positiveWidget, jsonReponse.prompt);
 
             if (nodeData.name === "WeiLinPromptUI") {
               // console.log(jsonReponse.lora.length)
               if (jsonReponse.lora && jsonReponse.lora.length > 0 && jsonReponse.lora != "") {
-                nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                setWidgetValue(loraWidget, JSON.stringify(jsonReponse.lora));
               } else {
-                nodeTextAreaList[1].value = "";
+                setWidgetValue(loraWidget, "");
               }
             }
 
             if (jsonReponse.temp_prompt && jsonReponse.temp_prompt != "") {
-              nodeTextAreaList[2].value = JSON.stringify(jsonReponse.temp_prompt);
+              setWidgetValue(tempWidget, JSON.stringify(jsonReponse.temp_prompt));
             }else {
-              nodeTextAreaList[2].value = "";
+              setWidgetValue(tempWidget, "");
             }
 
             if (nodeData.name === "WeiLinPromptUI") {
               if (jsonReponse.temp_lora && jsonReponse.temp_lora != "") {
-                nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                setWidgetValue(tempLoraWidget, JSON.stringify(jsonReponse.temp_lora));
               }else {
-                nodeTextAreaList[3].value = "";
+                setWidgetValue(tempLoraWidget, "");
               }
             }
 
@@ -345,7 +449,7 @@ app.registerExtension({
           } else if (event.data.type === 'weilin_prompt_ui_prompt_get_node_list_info') {
             // 获取节点导航信息
             if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIWithoutLora") {
-              updateNodeTextBySeed(thisNodeSeed, nodeTextAreaList[0].value);
+              updateNodeTextBySeed(thisNodeSeed, getWidgetValue(positiveWidget, nodeTextAreaList[0]));
               window.parent.postMessage({ type: 'weilin_prompt_ui_update_node_list_info', nodeList: globalNodeList }, '*')
             }
 
@@ -355,19 +459,23 @@ app.registerExtension({
             randomID = generateUUID();
             // console.log("register====>",randomID)
             let jsonData = {
-              prompt: nodeTextAreaList[0].value,
+              prompt: getWidgetValue(positiveWidget, nodeTextAreaList[0]),
               lora: [],
               temp_prompt: {},
               temp_lora: {},
             }
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[1].value.length > 0) {
-              jsonData.lora = JSON.parse(nodeTextAreaList[1].value);
+            const loraStr = getWidgetValue(loraWidget, nodeTextAreaList[1]);
+            const tempPromptStr = getWidgetValue(tempWidget, nodeTextAreaList[2]);
+            const tempLoraStr = getWidgetValue(tempLoraWidget, nodeTextAreaList[3]);
+
+            if (nodeData.name === "WeiLinPromptUI" && loraStr.length > 0) {
+              jsonData.lora = JSON.parse(loraStr);
             }
-            if (nodeTextAreaList[2].value.length > 0) {
-              jsonData.temp_prompt = JSON.parse(nodeTextAreaList[2].value)
+            if (tempPromptStr.length > 0) {
+              jsonData.temp_prompt = JSON.parse(tempPromptStr)
             }
-            if (nodeData.name === "WeiLinPromptUI" && nodeTextAreaList[3].value.length > 0) {
-              jsonData.temp_lora = JSON.parse(nodeTextAreaList[3].value)
+            if (nodeData.name === "WeiLinPromptUI" && tempLoraStr.length > 0) {
+              jsonData.temp_lora = JSON.parse(tempLoraStr)
             }
 
             const data = JSON.stringify(jsonData)
@@ -380,19 +488,20 @@ app.registerExtension({
             if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
               // console.log(jsonReponse.lora.length)
               if (jsonReponse.lora && jsonReponse.lora.length > 0 && jsonReponse.lora != "") {
-                nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                setWidgetValue(loraWidget, JSON.stringify(jsonReponse.lora));
               } else {
-                nodeTextAreaList[1].value = "";
+                setWidgetValue(loraWidget, "");
               }
 
               if (jsonReponse.temp_lora && jsonReponse.temp_lora != "") {
-                nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                setWidgetValue(tempLoraWidget, JSON.stringify(jsonReponse.temp_lora));
               }else{
-                nodeTextAreaList[3].value = "";
+                setWidgetValue(tempLoraWidget, "");
               }
 
-              if (nodeTextAreaList[3].value.length > 0) {
-                window.weilinGlobalSelectedLoras[thisNodeSeed] = JSON.parse(nodeTextAreaList[3].value)
+              const tempLoraStr = getWidgetValue(tempLoraWidget, nodeTextAreaList[3]);
+              if (tempLoraStr.length > 0) {
+                window.weilinGlobalSelectedLoras[thisNodeSeed] = JSON.parse(tempLoraStr)
               }else {
                 window.weilinGlobalSelectedLoras[thisNodeSeed]= []
               }
@@ -404,24 +513,24 @@ app.registerExtension({
             const jsonReponse = JSON.parse(event.data.data)
             if (nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
               if (jsonReponse.lora && jsonReponse.lora.length > 0 && jsonReponse.lora != "") {
-                nodeTextAreaList[1].value = JSON.stringify(jsonReponse.lora);
+                setWidgetValue(loraWidget, JSON.stringify(jsonReponse.lora));
               } else {
-                nodeTextAreaList[1].value = "";
+                setWidgetValue(loraWidget, "");
               }
               if (jsonReponse.temp_lora && jsonReponse.temp_lora != "") {
-                nodeTextAreaList[3].value = JSON.stringify(jsonReponse.temp_lora);
+                setWidgetValue(tempLoraWidget, JSON.stringify(jsonReponse.temp_lora));
               }else{
-                nodeTextAreaList[3].value = "";
+                setWidgetValue(tempLoraWidget, "");
               }
             }
           }else if (event.data.type === "weilin_prompt_ui_selectLora_stack_node_"+thisNodeSeed) {
             addLora(thisNodeSeed,event.data.lora)
           }else if (event.data.type === "weilin_prompt_ui_update_template_"+randomID) {
-            nodeTextAreaList[4].value = event.data.data
+            setWidgetValue(randomTemplateWidget, event.data.data)
           }else if (event.data.type === "weilin_prompt_ui_get_template_"+randomID) {
-            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_response', id: randomID, data: nodeTextAreaList[4].value }, '*')
+            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_response', id: randomID, data: getWidgetValue(randomTemplateWidget, nodeTextAreaList[4]) }, '*')
           }else if (event.data.type === "weilin_prompt_ui_get_template_go_random_"+randomID) {
-            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_go_random_response', id: randomID, data: nodeTextAreaList[4].value }, '*')
+            window.parent.postMessage({ type: 'weilin_prompt_ui_get_template_go_random_response', id: randomID, data: getWidgetValue(randomTemplateWidget, nodeTextAreaList[4]) }, '*')
           }
 
         }, false);
@@ -435,10 +544,7 @@ app.registerExtension({
 				onExecuted?.apply(this, arguments);
         const positiveWidget = this.widgets.find(w => w.name === "positive");
         if (positiveWidget && message.positive) {
-          positiveWidget.element.value = message.positive;
-          // 触发input事件以更新全局状态
-          const event = new Event('input', { bubbles: true });
-          positiveWidget.element.dispatchEvent(event);
+          setWidgetValue(positiveWidget, message.positive);
         }
         // console.log(message.positive)
 			};
@@ -450,21 +556,24 @@ app.registerExtension({
 //from melmass
 // https://github.com/kijai/ComfyUI-KJNodes/blob/main/web/js/spline_editor.js
 function hideWidgetForGood(node, widget, suffix = '') {
+  if (!widget) return;
+
   widget.origType = widget.type
   widget.origComputeSize = widget.computeSize
+  widget.origComputeLayoutSize = widget.computeLayoutSize
   widget.origSerializeValue = widget.serializeValue
   widget.computeSize = () => [0, -4] // -4 is due to the gap litegraph adds between widgets automatically
-  widget.type = "converted-widget" + suffix
+  widget.computeLayoutSize = () => ({
+    minWidth: 0,
+    minHeight: 0,
+    maxWidth: 0,
+    maxHeight: 0,
+  })
+  widget.type = "hidden"
+  widget.hidden = true
 
-  widget.element.style.display = 'none'
-  // widget.serializeValue = () => {
-  //     // Prevent serializing the widget if we have no input linked
-  //     const w = node.inputs?.find((i) => i.widget?.name === widget.name);
-  //     if (w?.link == null) {
-  //         return undefined;
-  //     }
-  //     return widget.origSerializeValue ? widget.origSerializeValue() : widget.value;
-  // };
+  hideWidgetElement(widget);
+  widget.serializeValue = () => getWidgetValue(widget, widget.element);
 
   // Hide any linked widgets, e.g. seed+seedControl
   if (widget.linkedWidgets) {
@@ -476,9 +585,22 @@ function hideWidgetForGood(node, widget, suffix = '') {
 
 function createLoraStackWidget(node, seed, ptEl) {
   var element = document.createElement("div");
+  element.style.pointerEvents = "auto";
+  protectDomWidgetEvents(element);
+
   const previewNode = node;
   const prSeed = seed;
   const prTempLoraEl = ptEl;
+  const loraWidget = node.widgets.find(w => w.name === "lora_str");
+  const tempLoraWidget = node.widgets.find(w => w.name === "temp_lora_str");
+
+  window.weilinLoraStackWidgetRefs = window.weilinLoraStackWidgetRefs || {};
+  window.weilinLoraStackWidgetRefs[prSeed] = {
+    setValues(loraValue, tempLoraValue) {
+      setWidgetValue(loraWidget, loraValue);
+      setWidgetValue(tempLoraWidget, tempLoraValue);
+    },
+  };
 
 
   var previewWidget = node.addDOMWidget("weilin_lora_stack", "lora_stack", element, {
@@ -510,7 +632,7 @@ function createLoraStackWidget(node, seed, ptEl) {
   previewWidget.contentEl.innerHTML = `
     <div class="weilin-comfyui-lora-header">
         <div class="weilin-comfyui-header-actions">
-            <button class="weilin-comfyui-add-btn" onclick="openLoraManager(this)" id="addLoraBtn" data-seed="`+prSeed+`" title="${localLang === 'zh' ? '添加Lora' : 'Add Lora' }">
+            <button class="weilin-comfyui-add-btn" id="addLoraBtn_`+prSeed+`" data-seed="`+prSeed+`" title="${localLang === 'zh' ? '添加Lora' : 'Add Lora' }">
                 <svg viewBox="0 0 24 24" width="16" height="16">
                     <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                 </svg>
@@ -524,11 +646,26 @@ function createLoraStackWidget(node, seed, ptEl) {
     </div>
   `
   previewWidget.contentEl.className = "weilin-comfyui-lora-content"
+  protectDomWidgetEvents(previewWidget.contentEl);
   previewWidget.parentEl.appendChild(previewWidget.contentEl)
 
+  const addLoraButton = previewWidget.contentEl.querySelector(`#addLoraBtn_${prSeed}`);
+  if (addLoraButton) {
+    addLoraButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof openLoraManager === 'function') {
+        openLoraManager(addLoraButton);
+      } else {
+        openNodeLoraManager(prSeed);
+      }
+    });
+  }
+
   setTimeout(() => {
-    if (prTempLoraEl.value.length > 0) {
-      window.weilinGlobalSelectedLoras[seed] = JSON.parse(prTempLoraEl.value)
+    const tempLoraValue = getWidgetValue(tempLoraWidget, prTempLoraEl);
+    if (tempLoraValue.length > 0) {
+      window.weilinGlobalSelectedLoras[seed] = JSON.parse(tempLoraValue)
     }else {
       window.weilinGlobalSelectedLoras[seed]= []
     }
