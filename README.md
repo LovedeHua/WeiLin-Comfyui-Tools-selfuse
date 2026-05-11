@@ -1,4 +1,6 @@
 <div align="center">
+
+这个是个人修改后自用，从0.072版本开始修改
   
 ### [🇨🇳 简体中文](README.md) | [🇺🇸 English](README_EN.md)
 
