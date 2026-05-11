@@ -1,14 +1,21 @@
 <template>
   <Teleport to="#weilin_comfyui_tools_prompt_ui_div">
-    <div class="weilin_prompt_ui_draggable-window" :style="{
-      left: `${currentPosition.x}px`,
-      top: `${currentPosition.y}px`,
-      width: `${currentSize.width}px`,
-      height: `${currentSize.height}px`,
-      zIndex: zIndex
-    }" @mousedown="setActive">
+    <div
+      class="weilin_prompt_ui_draggable-window"
+      :style="{
+        left: `${currentPosition.x}px`,
+        top: `${currentPosition.y}px`,
+        width: `${currentSize.width}px`,
+        height: `${currentSize.height}px`,
+        zIndex: currentZIndex
+      }"
+      @mousedown="handleWindowMouseDown"
+      tabindex="-1"
+      ref="windowRef"
+      @keydown="handleKeydown"
+    >
       <!-- 窗口标题栏 -->
-      <div class="weilin_prompt_ui_window-header" @mousedown.stop="handleHeaderMouseDown">
+      <div class="weilin_prompt_ui_window-header" @mousedown.stop="handleHeaderMouseDown" @dblclick="close">
         <div class="weilin_prompt_ui_window-title">{{ title }}</div>
         <button class="weilin_prompt_ui_close-btn" @click="close">×</button>
       </div>
@@ -25,7 +32,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps({
@@ -43,7 +50,7 @@ const props = defineProps({
   },
   zIndex: {
     type: Number,
-    default: 1
+    default: 0
   },
   name: {
     type: String,
@@ -55,11 +62,14 @@ const { t } = useI18n()
 
 const emit = defineEmits(['update:position', 'update:size', 'active', 'close'])
 
-// 当前位置和大小状态
+const windowRef = ref(null)
+
+// 当前状态
 const currentPosition = ref({ x: 0, y: 0 })
 const currentSize = ref({ width: 600, height: 400 })
+const currentZIndex = ref(props.zIndex)
 
-// 监听 props 中的 position 变化
+// 同步 props 变化
 watch(() => props.position, (newPosition) => {
   if (newPosition) {
     currentPosition.value = { ...newPosition }
@@ -67,7 +77,6 @@ watch(() => props.position, (newPosition) => {
   }
 }, { immediate: true, deep: true })
 
-// 监听 props 中的 size 变化
 watch(() => props.size, (newSize) => {
   if (newSize) {
     currentSize.value = { ...newSize }
@@ -75,41 +84,61 @@ watch(() => props.size, (newSize) => {
   }
 }, { immediate: true, deep: true })
 
+watch(() => props.zIndex, (newZ) => {
+  currentZIndex.value = newZ
+})
+
 const handleScroll = () => {
   window.parent.postMessage({ type: `weilin_prompt_ui_window_change_${props.name}_scroll` }, '*')
 }
 
-// 在组件挂载时初始化位置和大小
+// 边界常量
+const MIN_LEFT_SPACE = 100
+const MIN_TOP_SPACE = 55
+const MIN_BOTTOM_SPACE = 100
+const MIN_RIGHT_SPACE = 100
+
+// 初始化
 onMounted(() => {
-   // 设置初始位置
-   if (props.position) {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const minLeftSpace = 100; // 左侧保留的最小空间
+  if (props.position) {
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
     
-    // 边界检测
-    let x = props.position.x;
-    let y = props.position.y;
+    let x = props.position.x
+    let y = props.position.y
     
-    // 确保左侧保留至少窗口宽度100px的位置
-    x = Math.max(minLeftSpace - (props.size?.width || currentSize.value.width), x);
-    // 确保右侧保留最少100px的位置
-    x = Math.min(x, viewportWidth - 100);
-    // 确保顶部不超出边界
-    y = Math.max(100, y);
-    // 确保底部保留最少100px的位置
-    y = Math.min(y, viewportHeight - 100);
+    x = Math.max(MIN_LEFT_SPACE - (props.size?.width || currentSize.value.width), x)
+    x = Math.min(x, viewportWidth - MIN_RIGHT_SPACE)
+    y = Math.max(MIN_TOP_SPACE, y)
+    y = Math.min(y, viewportHeight - MIN_BOTTOM_SPACE)
     
-    currentPosition.value = { x, y };
+    currentPosition.value = { x, y }
   }
   
-  // 设置初始大小
   if (props.size) {
-    currentSize.value = { ...props.size };
+    currentSize.value = { ...props.size }
   }
+
+  // 自动聚焦，ESC 立即生效
+  nextTick(() => {
+    windowRef.value?.focus()
+  })
 })
 
-// 拖动相关状态和方法
+// ESC 关闭（仅在聚焦时生效）
+const handleKeydown = (e) => {
+  if (e.key === 'Escape') {
+    close()
+  }
+}
+
+// 点击窗口：激活 + 聚焦 + 通知父组件置顶
+const handleWindowMouseDown = () => {
+  windowRef.value?.focus()
+  emit('active')
+}
+
+// 拖动
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 
@@ -124,31 +153,22 @@ const startDrag = (event) => {
 }
 
 const handleDrag = (event) => {
-  if (isDragging.value) {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const minLeftSpace = 100; // 左侧保留的最小空间
-    
-    let newX = event.clientX - dragOffset.value.x;
-    let newY = event.clientY - dragOffset.value.y;
-    
-    // 确保左侧保留至少窗口宽度100px的位置
-    newX = Math.max(minLeftSpace - currentSize.value.width, newX);
-    // 确保右侧保留最少100px的位置
-    newX = Math.min(newX, viewportWidth - 100);
-    // 确保顶部不超出边界
-    newY = Math.max(100, newY);
-    // 确保底部保留最少100px的位置
-    newY = Math.min(newY, viewportHeight - 100);
-    
-    const newPosition = {
-      x: newX,
-      y: newY
-    };
-    
-    currentPosition.value = newPosition;
-    emit('update:position', newPosition);
-  }
+  if (!isDragging.value) return
+
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  
+  let newX = event.clientX - dragOffset.value.x
+  let newY = event.clientY - dragOffset.value.y
+  
+  newX = Math.max(MIN_LEFT_SPACE - currentSize.value.width, newX)
+  newX = Math.min(newX, viewportWidth - MIN_RIGHT_SPACE)
+  newY = Math.max(MIN_TOP_SPACE, newY)
+  newY = Math.min(newY, viewportHeight - MIN_BOTTOM_SPACE)
+  
+  const newPosition = { x: newX, y: newY }
+  currentPosition.value = newPosition
+  emit('update:position', newPosition)
 }
 
 const stopDrag = () => {
@@ -157,7 +177,7 @@ const stopDrag = () => {
   document.removeEventListener('mouseup', stopDrag)
 }
 
-// 调整大小相关状态和方法
+// 调整大小
 const isResizing = ref(false)
 const resizeStartPos = ref({ x: 0, y: 0 })
 const resizeStartSize = ref({ width: 0, height: 0 })
@@ -171,16 +191,16 @@ const startResize = (event) => {
 }
 
 const handleResize = (event) => {
-  if (isResizing.value) {
-    const deltaX = event.clientX - resizeStartPos.value.x
-    const deltaY = event.clientY - resizeStartPos.value.y
-    const newSize = {
-      width: Math.max(200, resizeStartSize.value.width + deltaX),
-      height: Math.max(200, resizeStartSize.value.height + deltaY)
-    }
-    currentSize.value = newSize
-    emit('update:size', newSize)
+  if (!isResizing.value) return
+
+  const deltaX = event.clientX - resizeStartPos.value.x
+  const deltaY = event.clientY - resizeStartPos.value.y
+  const newSize = {
+    width: Math.max(200, resizeStartSize.value.width + deltaX),
+    height: Math.max(200, resizeStartSize.value.height + deltaY)
   }
+  currentSize.value = newSize
+  emit('update:size', newSize)
 }
 
 const stopResize = () => {
@@ -197,11 +217,9 @@ const close = () => {
   emit('close')
 }
 
-// 处理标题栏点击
+// 标题栏点击：先激活，再拖动
 const handleHeaderMouseDown = (event) => {
-  // 先设置为活动窗口
-  setActive()
-  // 然后开始拖动
+  handleWindowMouseDown()
   startDrag(event)
 }
 </script>
@@ -216,7 +234,7 @@ const handleHeaderMouseDown = (event) => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  z-index: 100;
+  outline: none;
 }
 
 .weilin_prompt_ui_window-header {

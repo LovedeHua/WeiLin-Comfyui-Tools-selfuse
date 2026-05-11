@@ -1,10 +1,17 @@
 <template>
   <Teleport to="#weilin_comfyui_tools_prompt_ui_div">
     <Transition :name="`${prefix}dialog-fade`">
-      <div v-if="modelValue" :class="`${prefix}dialog-overlay`"  @click="handleOverlayClick">
+      <div v-if="modelValue" :class="`${prefix}dialog-overlay`" @click="handleOverlayClick">
         <Transition :name="`${prefix}dialog-slide`">
-          <div :style="{ 'width': width  }" :class="`${prefix}dialog`" @click.stop>
-            <div :class="`${prefix}dialog-header`">
+          <div
+            :style="{ 'width': width }"
+            :class="`${prefix}dialog`"
+            @click.stop
+            tabindex="-1"
+            ref="dialogRef"
+            @keydown="handleKeydown"
+          >
+            <div :class="`${prefix}dialog-header`" @dblclick="close">
               <h3 :class="`${prefix}dialog-title`">{{ title }}</h3>
               <button :class="`${prefix}dialog-close`" @click="close">
                 <svg viewBox="0 0 24 24" width="16" height="16">
@@ -26,6 +33,8 @@
 </template>
 
 <script setup>
+import { ref, watch, nextTick } from 'vue'
+
 const prefix = "weilin_prompt_ui_"
 
 const props = defineProps({
@@ -46,6 +55,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
+const dialogRef = ref(null)
+
 const close = () => {
   emit('update:modelValue', false)
 }
@@ -55,6 +66,22 @@ const handleOverlayClick = () => {
     close()
   }
 }
+
+// 仅在对话框获得焦点时响应 ESC
+const handleKeydown = (e) => {
+  if (e.key === 'Escape') {
+    close()
+  }
+}
+
+// 对话框打开时自动聚焦
+watch(() => props.modelValue, (visible) => {
+  if (visible) {
+    nextTick(() => {
+      dialogRef.value?.focus()
+    })
+  }
+})
 </script>
 
 <style scoped>
@@ -84,6 +111,7 @@ const handleOverlayClick = () => {
   max-width: 70%;
   min-height: 200px;
   max-height: 75vh;
+  outline: none; /* 移除聚焦时的默认轮廓 */
 }
 
 .weilin_prompt_ui_dialog-header {
@@ -93,6 +121,8 @@ const handleOverlayClick = () => {
   justify-content: space-between;
   align-items: center;
   background: transparent;
+  cursor: pointer;
+  user-select: none;
 }
 
 .weilin_prompt_ui_dialog-title {
