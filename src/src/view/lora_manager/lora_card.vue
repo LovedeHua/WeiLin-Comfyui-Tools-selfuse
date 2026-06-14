@@ -226,14 +226,24 @@
                 </ul>
 
                 <!-- 放大预览弹窗 -->
-                <div v-if="previewVisible" class="preview-overlay" @wheel="handleWheel" @mousemove="handlePreviewMouseMove" @mouseup="handlePreviewMouseUp" @mousedown="handlePreviewMouseDown">
+                <div v-if="previewVisible" class="preview-overlay" @wheel="handleWheel" @mousemove="handleUnifiedMouseMove" @mouseup="handleUnifiedMouseUp" @mousedown="handlePreviewMouseDown">
                     <div class="preview-container" @click.stop>
                         <button class="preview-close-btn" @click.stop="closePreview" title="关闭">×</button>
                         <div class="preview-click-area" @click="closePreview"></div>
-                        <div class="preview-hint">滚轮缩放 | 拖拽移动 | 双击重置 | 中键关闭</div>
+                        <div class="preview-hint">
+                        <div>滚轮缩放 | 拖拽移动</div>
+                        <div>双击重置 | 中键关闭</div>
+                        <div>视频拖拽边框移动</div>
+                    </div>
                         <div class="preview-content-wrapper" :class="{ 'is-dragging': isDraggingPreview }" :style="wrapperStyle">
                             <div class="preview-content" @mousedown="handlePreviewMouseDown" @dblclick="handlePreviewDoubleClick">
-                                <video v-if="previewIsVideo" :src="previewUrl" autoplay muted loop playsinline controls style="max-width: 90vw; max-height: 85vh; object-fit: contain;" />
+                                <div v-if="previewIsVideo" class="video-drag-frame" :style="videoFrameStyle">
+                                    <div class="video-drag-border top" @mousedown="handleVideoDragStart"></div>
+                                    <div class="video-drag-border right" @mousedown="handleVideoDragStart"></div>
+                                    <div class="video-drag-border bottom" @mousedown="handleVideoDragStart"></div>
+                                    <div class="video-drag-border left" @mousedown="handleVideoDragStart"></div>
+                                    <video :src="previewUrl" autoplay muted loop playsinline controls :style="videoPreviewStyle" />
+                                </div>
                                 <img v-else :src="previewUrl" draggable="false" :style="imgStyle" />
                             </div>
                         </div>
@@ -736,6 +746,21 @@ const imgStyle = computed(() => ({
     transition: isScaling.value && !isDraggingPreview.value ? 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
 }))
 
+// 视频预览样式
+const videoPreviewStyle = computed(() => ({
+    maxWidth: '90vw',
+    maxHeight: '85vh',
+    objectFit: 'contain',
+    transition: isScaling.value ? 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+}))
+
+// 视频边框容器样式：只包含缩放
+const videoFrameStyle = computed(() => ({
+    transform: `scale(${previewScale.value})`,
+    transformOrigin: 'center center',
+    transition: isScaling.value && !isDraggingPreview.value ? 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+}))
+
 // 计算属性：wrapper 样式（transform 平移）
 const wrapperStyle = computed(() => ({
     transform: `translate(${previewTranslateX.value}px, ${previewTranslateY.value}px)`,
@@ -787,20 +812,25 @@ const handleWheel = (e) => {
         isScaling.value = false
     }, 100)
 
-    // 以鼠标位置为中心缩放
-    const rect = e.currentTarget.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left - rect.width / 2
-    const mouseY = e.clientY - rect.top - rect.height / 2
-
     const oldScale = previewScale.value
     const delta = e.deltaY > 0 ? -0.12 : 0.12
-    const newScale = Math.max(0.15, Math.min(6, oldScale + delta))
 
-    // 调整位置使缩放以鼠标为中心
+    // 视频模式限制缩放范围 0.5 ~ 3，图片模式 0.15 ~ 6
+    const minScale = previewIsVideo.value ? 0.5 : 0.15
+    const maxScale = previewIsVideo.value ? 3 : 6
+    const newScale = Math.max(minScale, Math.min(maxScale, oldScale + delta))
+
     if (oldScale !== newScale) {
-        const scaleRatio = newScale / oldScale
-        previewTranslateX.value = mouseX - (mouseX - previewTranslateX.value) * scaleRatio
-        previewTranslateY.value = mouseY - (mouseY - previewTranslateY.value) * scaleRatio
+        if (!previewIsVideo.value) {
+            // 图片模式：以鼠标位置为中心缩放
+            const rect = e.currentTarget.getBoundingClientRect()
+            const mouseX = e.clientX - rect.left - rect.width / 2
+            const mouseY = e.clientY - rect.top - rect.height / 2
+            const scaleRatio = newScale / oldScale
+            previewTranslateX.value = mouseX - (mouseX - previewTranslateX.value) * scaleRatio
+            previewTranslateY.value = mouseY - (mouseY - previewTranslateY.value) * scaleRatio
+        }
+        // 视频模式：只改变缩放值，不修改平移位置（视频始终居中）
         previewScale.value = newScale
     }
 }
@@ -813,8 +843,9 @@ const handlePreviewMouseDown = (e) => {
         closePreview()
         return
     }
-    if (previewIsVideo.value) return // 视频不拖拽
-    // 阻止浏览器默认拖拽行为
+    // 视频模式下：只有边框能拖拽，视频本体不响应
+    if (previewIsVideo.value) return
+    // 图片模式：正常拖拽
     e.preventDefault()
     isDraggingPreview.value = true
     isScaling.value = false // 拖拽时禁用缩放过渡
@@ -828,21 +859,48 @@ const handlePreviewMouseDown = (e) => {
 const handlePreviewMouseMove = (e) => {
     if (!isDraggingPreview.value) return
     e.preventDefault()
-    // 使用 requestAnimationFrame 确保拖拽流畅
-    requestAnimationFrame(() => {
-        const dx = e.clientX - dragStartX.value
-        const dy = e.clientY - dragStartY.value
-        previewTranslateX.value = dragStartTranslateX.value + dx
-        previewTranslateY.value = dragStartTranslateY.value + dy
-    })
+    const dx = e.clientX - dragStartX.value
+    const dy = e.clientY - dragStartY.value
+    previewTranslateX.value = dragStartTranslateX.value + dx
+    previewTranslateY.value = dragStartTranslateY.value + dy
 }
 
 const handlePreviewMouseUp = () => {
     isDraggingPreview.value = false
 }
 
+// 统一的鼠标移动处理（用于 overlay）
+const handleUnifiedMouseMove = (e) => {
+    if (!isDraggingPreview.value) return
+    e.preventDefault()
+    const dx = e.clientX - dragStartX.value
+    const dy = e.clientY - dragStartY.value
+    previewTranslateX.value = dragStartTranslateX.value + dx
+    previewTranslateY.value = dragStartTranslateY.value + dy
+}
+
+// 统一的鼠标松开处理
+const handleUnifiedMouseUp = () => {
+    isDraggingPreview.value = false
+}
+
+// 视频边框拖拽启动
+const handleVideoDragStart = (e) => {
+    if (!previewIsVideo.value) return
+    // 确保点击的是边框元素
+    if (!e.target.classList.contains('video-drag-border')) return
+    e.preventDefault()
+    e.stopPropagation()
+    isDraggingPreview.value = true
+    dragStartX.value = e.clientX
+    dragStartY.value = e.clientY
+    dragStartTranslateX.value = previewTranslateX.value
+    dragStartTranslateY.value = previewTranslateY.value
+}
+
 // 双击重置
 const handlePreviewDoubleClick = () => {
+    // 双击重置缩放和位置
     isScaling.value = true
     previewScale.value = 1
     previewTranslateX.value = 0
@@ -1344,16 +1402,18 @@ input:focus {
 
 .preview-hint {
     position: fixed;
-    top: 112px;
-    right: 20px;
+    top: 120px;
+    right: 4px;
     color: rgba(255, 255, 255, 0.7);
-    font-size: 12px;
-    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1.7;
+    text-align: right;
     pointer-events: none;
-    z-index: 2147483649;
+    z-index: 2147483647;
     background: rgba(0, 0, 0, 0.5);
-    padding: 6px 12px;
+    padding: 6px 8px;
     border-radius: 4px;
+    white-space: nowrap;
 }
 
 .preview-content-wrapper {
@@ -1394,5 +1454,60 @@ input:focus {
 
 .preview-content-wrapper.is-dragging img {
     transition: none;
+}
+
+/* 视频拖拽边框 */
+.video-drag-frame {
+    position: relative;
+    display: inline-block;
+    padding: 12px;
+    margin: -12px;
+}
+
+.video-drag-border {
+    position: absolute;
+    z-index: 10;
+    background: transparent;
+}
+
+.video-drag-border.top {
+    top: 0;
+    left: 12px;
+    right: 12px;
+    height: 12px;
+    cursor: move;
+}
+
+.video-drag-border.right {
+    top: 12px;
+    right: 0;
+    bottom: 12px;
+    width: 12px;
+    cursor: move;
+}
+
+.video-drag-border.bottom {
+    bottom: 0;
+    left: 12px;
+    right: 12px;
+    height: 12px;
+    cursor: move;
+}
+
+.video-drag-border.left {
+    top: 12px;
+    left: 0;
+    bottom: 12px;
+    width: 12px;
+    cursor: move;
+}
+
+.video-drag-border:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.video-drag-frame video {
+    display: block;
+    pointer-events: auto;
 }
 </style>

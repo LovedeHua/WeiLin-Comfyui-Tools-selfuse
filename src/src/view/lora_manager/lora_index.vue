@@ -200,7 +200,7 @@ const handEnterCard = () => {
   isHovering.value = true;
 }
 const handleMouseHover = (fileName, event) => {
-  if (!showHoverInfo.value || showHoverInfo.value == "false") return; // 如果不显示悬浮信息，直接返回
+  if (!showHoverInfo.value || showHoverInfo.value == "false") return;
 
   isHovering.value = true;
   if (hoveFileName.value === fileName && showCard.value) return;
@@ -209,45 +209,34 @@ const handleMouseHover = (fileName, event) => {
   const cardRect = hoveredCard.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  const cardWidth = 520;  // LoraCard的宽度
-  const cardHeight = 400; // LoraCard的高度
-  const gap = 14; // 卡片间距
+  const cardWidth = 520;   // LoraCard宽度
+  const cardHeight = 400;  // LoraCard高度
+  const gap = 14;
 
-  // 计算最佳显示位置
-  let position = {
-    left: 0,
-    top: 0
-  };
+  let position = { left: 0, top: 0 };
 
-  // 优先尝试在卡片右侧显示
   const rightSpace = viewportWidth - cardRect.right - gap;
   const leftSpace = cardRect.left - gap;
   const bottomSpace = viewportHeight - cardRect.bottom - gap;
   const topSpace = cardRect.top - gap;
 
   if (rightSpace >= cardWidth) {
-    // 右侧空间足够，显示在右侧
     position.left = cardRect.right + gap;
     position.top = cardRect.top;
   } else if (leftSpace >= cardWidth) {
-    // 左侧空间足够，显示在左侧
     position.left = cardRect.left - cardWidth - gap;
     position.top = cardRect.top;
   } else if (bottomSpace >= cardHeight) {
-    // 左右都不够，尝试显示在下方
     position.left = Math.max(gap, Math.min(cardRect.left, viewportWidth - cardWidth - gap));
     position.top = cardRect.bottom + gap;
   } else if (topSpace >= cardHeight) {
-    // 显示在上方
     position.left = Math.max(gap, Math.min(cardRect.left, viewportWidth - cardWidth - gap));
     position.top = cardRect.top - cardHeight - gap;
   } else {
-    // 空间都不足，默认显示在右侧（可能被截断，但尽量对齐）
     position.left = Math.max(gap, viewportWidth - cardWidth - gap);
     position.top = Math.max(gap, Math.min(cardRect.top, viewportHeight - cardHeight - gap));
   }
 
-  // 确保不会超出视窗边界
   position.left = Math.max(gap, Math.min(position.left, viewportWidth - cardWidth - gap));
   position.top = Math.max(gap, Math.min(position.top, viewportHeight - cardHeight - gap));
 
