@@ -212,6 +212,7 @@ async def get_model_info(file: str,
     should_save = True
 
   if img_next_to_file:
+    is_video = img_next_to_file.lower().endswith('.mp4')
     img_next_to_file_url = f'/weilin/prompt_ui/api/lorainfo/api/loras/img?file={file}'
     if len(info_data['images']) == 0 or info_data['images'][0]['url'] != img_next_to_file_url:
       info_data['images'].insert(0, {'url': img_next_to_file_url})

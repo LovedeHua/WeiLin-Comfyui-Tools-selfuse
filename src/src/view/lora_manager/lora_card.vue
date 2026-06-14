@@ -219,7 +219,8 @@
                 <ul class="lora-detail__images" v-if="loraInfo.images?.length" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
                     <li v-for="(img, index) in loraInfo.images" :key="index" class="lora-detail__image-item">
                         <div class="image-wrapper" style="height: 200px;">
-                            <img :src="img.url" style="width: 100%; height: 100%; object-fit: contain;" />
+                            <video v-if="isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;" />
+                            <img v-else :src="img.url" @mouseenter="handleCardEnter" style="width: 100%; height: 100%; object-fit: contain;" />
                         </div>
                     </li>
                 </ul>
@@ -694,6 +695,11 @@ const toggleCollapse = () => {
 
 const refresh = () => {
     init()
+}
+
+const isVideoUrl = (url) => {
+    if (!url) return false
+    return url.startsWith('data:video/') || url.toLowerCase().endsWith('.mp4')
 }
 
 defineExpose({

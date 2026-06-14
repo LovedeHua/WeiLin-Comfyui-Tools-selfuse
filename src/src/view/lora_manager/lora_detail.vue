@@ -255,7 +255,8 @@
                                     <div class="image-action" @click="saveLoraImg(img.url)">
                                         设置为Lora封面
                                     </div>
-                                    <img :src="img.url" />
+                                    <video v-if="isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;" />
+                                    <img v-else :src="img.url" />
                                 </div>
 
                                 <figcaption class="image-info">
@@ -934,6 +935,11 @@ const isCollapsed = ref(true); // 添加展开/收起状态
 
 const toggleCollapse = () => {
     isCollapsed.value = !isCollapsed.value;
+}
+
+const isVideoUrl = (url) => {
+    if (!url) return false
+    return url.startsWith('data:video/') || url.toLowerCase().endsWith('.mp4')
 }
 
 </script>

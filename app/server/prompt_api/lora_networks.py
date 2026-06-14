@@ -234,7 +234,7 @@ async def get_extra_networks(auto_fetch=False):
     return return_response
 
 def preview_file(filename: str):
-    preview_exts = [".jpg", ".png", ".jpeg", ".gif"]
+    preview_exts = [".jpg", ".png", ".jpeg", ".gif", ".webp", ".mp4"]
     preview_exts = [*preview_exts, *[".preview" + x for x in preview_exts]]
     for ext in preview_exts:
         try:
@@ -242,13 +242,19 @@ def preview_file(filename: str):
             if os.path.exists(pathStr):
                 # because ComfyUI has extra model path feature
                 # the path might not be relative to the ComfyUI root
-                # so instead of returning the path, we return the image data directly, to avoid security issues
-                # print(pathStr)
-                bytes = get_thumbnail_for_image_file(pathStr)
-                # Get the base64 string
-                img_base64 = base64.b64encode(bytes).decode()
-                # Return the base64 string
-                return f"data:image/jpeg;base64, {img_base64}"
+                # so instead of returning the path, we return the data directly, to avoid security issues
+                if ext == ".mp4" or ext.endswith(".mp4"):
+                    # 对于视频文件，返回视频数据的 base64 data URL
+                    with open(pathStr, "rb") as f:
+                        video_bytes = f.read()
+                    video_base64 = base64.b64encode(video_bytes).decode()
+                    return f"data:video/mp4;base64, {video_base64}"
+                else:
+                    bytes = get_thumbnail_for_image_file(pathStr)
+                    # Get the base64 string
+                    img_base64 = base64.b64encode(bytes).decode()
+                    # Return the base64 string
+                    return f"data:image/jpeg;base64, {img_base64}"
         except Exception as e:
             print(f"读取封面出错: {e}")
             return None

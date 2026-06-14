@@ -69,7 +69,9 @@
           style="display: flex; flex-direction: column; min-height: 200px; cursor: pointer;">
           <div :class="`${prefix}lora-preview`"
             style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden;width: 100%;">
-            <img v-if="lora.preview" :src="lora.preview" :alt="lora.model_name" :title="lora.model_name" loading="lazy"
+            <video v-if="lora.preview && isVideoPreview(lora.preview)" :src="lora.preview" autoplay muted loop playsinline
+              style="width: 100%; height: 100%; object-fit: contain; min-height: 150px;" />
+            <img v-else-if="lora.preview" :src="lora.preview" :alt="lora.model_name" :title="lora.model_name" loading="lazy"
               style="width: 100%; height: 100%; object-fit: contain; min-height: 150px;" />
             <div v-else :class="`${prefix}no-preview`"
               style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; min-height: 150px;">
@@ -598,6 +600,11 @@ const addLoraTag = (loraData) => {
   // message({ type: "success", str: `已添加Lora标签: ${loraName}` });
 }
 
+const isVideoPreview = (preview) => {
+  if (!preview) return false
+  return preview.startsWith('data:video/') || preview.toLowerCase().endsWith('.mp4')
+}
+
 defineExpose({
   openSetSeed
 })
@@ -765,9 +772,10 @@ defineExpose({
   gap: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
-  min-height: 40px;
-  /* 添加最小高度 */
-  max-height: 100px;
+  min-height: 80px;
+  /* 增大最小高度以容纳2行目录 */
+  max-height: 120px;
+  /* 增大最大高度以容纳2行目录 */
   overflow-y: auto;
 }
 
