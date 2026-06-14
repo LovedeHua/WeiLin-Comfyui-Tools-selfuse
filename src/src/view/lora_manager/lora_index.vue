@@ -62,7 +62,7 @@
       </div>
 
       <div :class="`${prefix}lora-list`"
-        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">
+        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px;">
         <div v-for="lora in paginatedLoraList" :key="lora.file_path" :class="`${prefix}lora-card`" ref="loraCardRef"
           @click="openLoraDetail(lora)" @mouseover="(e) => handleMouseHover(lora.name, e)"
           @mouseleave="handleMouseLeave"
@@ -70,11 +70,11 @@
           <div :class="`${prefix}lora-preview`"
             style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden;width: 100%;">
             <video v-if="lora.preview && isVideoPreview(lora.preview)" :src="lora.preview" autoplay muted loop playsinline
-              style="width: 100%; height: 100%; object-fit: contain; min-height: 150px;" />
+              style="width: 100%; height: 100%; object-fit: contain; min-height: 180px;" />
             <img v-else-if="lora.preview" :src="lora.preview" :alt="lora.model_name" :title="lora.model_name" loading="lazy"
-              style="width: 100%; height: 100%; object-fit: contain; min-height: 150px;" />
+              style="width: 100%; height: 100%; object-fit: contain; min-height: 180px;" />
             <div v-else :class="`${prefix}no-preview`"
-              style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; min-height: 150px;">
+              style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; min-height: 180px;">
               <svg viewBox="0 0 24 24" width="24" height="24">
                 <path
                   d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
@@ -207,24 +207,49 @@ const handleMouseHover = (fileName, event) => {
 
   const hoveredCard = event.currentTarget;
   const cardRect = hoveredCard.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  const cardWidth = 450; // LoraCard的宽度
+  const cardWidth = 520;  // LoraCard的宽度
+  const cardHeight = 400; // LoraCard的高度
+  const gap = 14; // 卡片间距
 
-  // 计算最佳显示位置 - 居中显示
+  // 计算最佳显示位置
   let position = {
-    left: cardRect.left + (cardRect.width - cardWidth) / 2, // 居中计算
-    top: cardRect.top + cardRect.height + 10 // 默认在下方显示
+    left: 0,
+    top: 0
   };
 
-  // 检查底部空间是否足够
-  if (position.top + 310 > viewportHeight) {
-    // 底部空间不足，改为在上方显示
-    position.top = cardRect.top - 310;
+  // 优先尝试在卡片右侧显示
+  const rightSpace = viewportWidth - cardRect.right - gap;
+  const leftSpace = cardRect.left - gap;
+  const bottomSpace = viewportHeight - cardRect.bottom - gap;
+  const topSpace = cardRect.top - gap;
+
+  if (rightSpace >= cardWidth) {
+    // 右侧空间足够，显示在右侧
+    position.left = cardRect.right + gap;
+    position.top = cardRect.top;
+  } else if (leftSpace >= cardWidth) {
+    // 左侧空间足够，显示在左侧
+    position.left = cardRect.left - cardWidth - gap;
+    position.top = cardRect.top;
+  } else if (bottomSpace >= cardHeight) {
+    // 左右都不够，尝试显示在下方
+    position.left = Math.max(gap, Math.min(cardRect.left, viewportWidth - cardWidth - gap));
+    position.top = cardRect.bottom + gap;
+  } else if (topSpace >= cardHeight) {
+    // 显示在上方
+    position.left = Math.max(gap, Math.min(cardRect.left, viewportWidth - cardWidth - gap));
+    position.top = cardRect.top - cardHeight - gap;
+  } else {
+    // 空间都不足，默认显示在右侧（可能被截断，但尽量对齐）
+    position.left = Math.max(gap, viewportWidth - cardWidth - gap);
+    position.top = Math.max(gap, Math.min(cardRect.top, viewportHeight - cardHeight - gap));
   }
 
   // 确保不会超出视窗边界
-  position.left = Math.max(10, Math.min(position.left, window.innerWidth - cardWidth - 10));
-  position.top = Math.max(10, Math.min(position.top, viewportHeight - 310));
+  position.left = Math.max(gap, Math.min(position.left, viewportWidth - cardWidth - gap));
+  position.top = Math.max(gap, Math.min(position.top, viewportHeight - cardHeight - gap));
 
   paddingLeftValue.value = position.left;
   paddingTopValue.value = position.top;
@@ -630,6 +655,8 @@ defineExpose({
   position: relative;
   padding-right: 8px;
   box-sizing: border-box;
+  min-height: 620px;
+  /* 增大最小高度以容纳2.5行卡片 */
 }
 
 .weilin_prompt_ui_lora-list-container::-webkit-scrollbar {
@@ -935,9 +962,10 @@ defineExpose({
   background: var(--weilin-prompt-ui-primary-bg);
   transition: all 0.3s ease;
   overflow: hidden;
-  aspect-ratio: 1/1.3;
-  /* position: relative; */
-  /* 保持卡片比例 */
+  aspect-ratio: 1/1.5;
+  /* 调整比例让卡片更高 */
+  min-height: 220px;
+  /* 增大卡片最小高度 */
 }
 
 .weilin_prompt_ui_lora-card:hover {

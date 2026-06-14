@@ -506,13 +506,16 @@
     margin-top: 1px;
     padding: 6px;
     box-sizing: border-box;
-    max-height: 600px;
-    min-height: 200px;
-    /* 确保有足够的最小高度 */
+    max-height: 800px;
+    /* 增大最大高度以容纳更多卡片 */
+    min-height: 520px;
+    /* 增大最小高度以显示2.5行卡片 */
     overflow: hidden;
     display: flex;
     flex-direction: column;
 }
+
+
 
 .tag-manager-section {
     margin-top: 16px;

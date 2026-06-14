@@ -218,12 +218,27 @@
                 <!-- 图片 -->
                 <ul class="lora-detail__images" v-if="loraInfo.images?.length" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
                     <li v-for="(img, index) in loraInfo.images" :key="index" class="lora-detail__image-item">
-                        <div class="image-wrapper" style="height: 200px;">
-                            <video v-if="isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;" />
-                            <img v-else :src="img.url" @mouseenter="handleCardEnter" style="width: 100%; height: 100%; object-fit: contain;" />
+                        <div class="image-wrapper" style="height: 200px; cursor: zoom-in;" @click="openPreview(img.url)">
+                            <video v-if="isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" @click.stop="openPreview(img.url)" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;" />
+                            <img v-else :src="img.url" @mouseenter="handleCardEnter" @click.stop="openPreview(img.url)" draggable="false" style="width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;" />
                         </div>
                     </li>
                 </ul>
+
+                <!-- 放大预览弹窗 -->
+                <div v-if="previewVisible" class="preview-overlay" @wheel="handleWheel" @mousemove="handlePreviewMouseMove" @mouseup="handlePreviewMouseUp" @mousedown="handlePreviewMouseDown">
+                    <div class="preview-container" @click.stop>
+                        <button class="preview-close-btn" @click.stop="closePreview" title="关闭">×</button>
+                        <div class="preview-click-area" @click="closePreview"></div>
+                        <div class="preview-hint">滚轮缩放 | 拖拽移动 | 双击重置 | 中键关闭</div>
+                        <div class="preview-content-wrapper" :class="{ 'is-dragging': isDraggingPreview }" :style="wrapperStyle">
+                            <div class="preview-content" @mousedown="handlePreviewMouseDown" @dblclick="handlePreviewDoubleClick">
+                                <video v-if="previewIsVideo" :src="previewUrl" autoplay muted loop playsinline controls style="max-width: 90vw; max-height: 85vh; object-fit: contain;" />
+                                <img v-else :src="previewUrl" draggable="false" :style="imgStyle" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -264,6 +279,8 @@ const fileURL = ref('')
 const emit = defineEmits(['cardLeave', 'cardenter'])
 
 const handleCardLeave = () => {
+    // 如果预览放大弹窗打开，不关闭悬浮窗口
+    if (previewVisible.value) return
     emit('cardLeave')
 }
 const handleCardEnter = () => {
@@ -693,6 +710,146 @@ const toggleCollapse = () => {
     isCollapsed.value = !isCollapsed.value;
 }
 
+// ========== 图片/视频放大预览 ==========
+const previewVisible = ref(false)
+const previewUrl = ref('')
+const previewIsVideo = ref(false)
+
+// 缩放和拖拽状态
+const previewScale = ref(1)
+const previewTranslateX = ref(0)
+const previewTranslateY = ref(0)
+const previewImgWidth = ref(0)
+const previewImgHeight = ref(0)
+const isDraggingPreview = ref(false)
+const isScaling = ref(false)
+let scaleTimeout = null
+const dragStartX = ref(0)
+const dragStartY = ref(0)
+const dragStartTranslateX = ref(0)
+const dragStartTranslateY = ref(0)
+
+// 计算属性：图片样式（transform 缩放）
+const imgStyle = computed(() => ({
+    transform: `scale(${previewScale.value})`,
+    transformOrigin: 'center center',
+    transition: isScaling.value && !isDraggingPreview.value ? 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+}))
+
+// 计算属性：wrapper 样式（transform 平移）
+const wrapperStyle = computed(() => ({
+    transform: `translate(${previewTranslateX.value}px, ${previewTranslateY.value}px)`,
+    transition: isDraggingPreview.value ? 'none' : 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+}))
+
+const openPreview = (url) => {
+    previewUrl.value = url
+    previewIsVideo.value = isVideoUrl(url)
+    previewVisible.value = true
+    // 重置缩放和位置
+    previewScale.value = 1
+    previewTranslateX.value = 0
+    previewTranslateY.value = 0
+    // 初始化图片尺寸
+    previewImgWidth.value = window.innerWidth * 0.8
+    previewImgHeight.value = window.innerHeight * 0.8
+    // 如果是图片，加载后获取实际尺寸
+    if (!previewIsVideo.value) {
+        const img = new Image()
+        img.onload = () => {
+            // 计算适应屏幕的初始尺寸
+            const maxWidth = window.innerWidth * 0.8
+            const maxHeight = window.innerHeight * 0.8
+            const scale = Math.min(maxWidth / img.naturalWidth, maxHeight / img.naturalHeight, 1)
+            previewImgWidth.value = img.naturalWidth * scale
+            previewImgHeight.value = img.naturalHeight * scale
+        }
+        img.src = url
+    }
+}
+
+const closePreview = () => {
+    previewVisible.value = false
+    previewUrl.value = ''
+    previewIsVideo.value = false
+    previewScale.value = 1
+    previewTranslateX.value = 0
+    previewTranslateY.value = 0
+}
+
+// 缩放功能
+const handleWheel = (e) => {
+    e.preventDefault()
+    // 启用缩放过渡动画
+    isScaling.value = true
+    if (scaleTimeout) clearTimeout(scaleTimeout)
+    scaleTimeout = setTimeout(() => {
+        isScaling.value = false
+    }, 100)
+
+    // 以鼠标位置为中心缩放
+    const rect = e.currentTarget.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left - rect.width / 2
+    const mouseY = e.clientY - rect.top - rect.height / 2
+
+    const oldScale = previewScale.value
+    const delta = e.deltaY > 0 ? -0.12 : 0.12
+    const newScale = Math.max(0.15, Math.min(6, oldScale + delta))
+
+    // 调整位置使缩放以鼠标为中心
+    if (oldScale !== newScale) {
+        const scaleRatio = newScale / oldScale
+        previewTranslateX.value = mouseX - (mouseX - previewTranslateX.value) * scaleRatio
+        previewTranslateY.value = mouseY - (mouseY - previewTranslateY.value) * scaleRatio
+        previewScale.value = newScale
+    }
+}
+
+// 拖拽功能 - 阻止浏览器默认拖拽行为
+const handlePreviewMouseDown = (e) => {
+    // 鼠标中键(滚轮键)点击关闭预览
+    if (e.button === 1) {
+        e.preventDefault()
+        closePreview()
+        return
+    }
+    if (previewIsVideo.value) return // 视频不拖拽
+    // 阻止浏览器默认拖拽行为
+    e.preventDefault()
+    isDraggingPreview.value = true
+    isScaling.value = false // 拖拽时禁用缩放过渡
+    if (scaleTimeout) clearTimeout(scaleTimeout)
+    dragStartX.value = e.clientX
+    dragStartY.value = e.clientY
+    dragStartTranslateX.value = previewTranslateX.value
+    dragStartTranslateY.value = previewTranslateY.value
+}
+
+const handlePreviewMouseMove = (e) => {
+    if (!isDraggingPreview.value) return
+    e.preventDefault()
+    // 使用 requestAnimationFrame 确保拖拽流畅
+    requestAnimationFrame(() => {
+        const dx = e.clientX - dragStartX.value
+        const dy = e.clientY - dragStartY.value
+        previewTranslateX.value = dragStartTranslateX.value + dx
+        previewTranslateY.value = dragStartTranslateY.value + dy
+    })
+}
+
+const handlePreviewMouseUp = () => {
+    isDraggingPreview.value = false
+}
+
+// 双击重置
+const handlePreviewDoubleClick = () => {
+    isScaling.value = true
+    previewScale.value = 1
+    previewTranslateX.value = 0
+    previewTranslateY.value = 0
+    setTimeout(() => { isScaling.value = false }, 100)
+}
+
 const refresh = () => {
     init()
 }
@@ -703,7 +860,8 @@ const isVideoUrl = (url) => {
 }
 
 defineExpose({
-    refresh
+    refresh,
+    previewVisible
 })
 
 </script>
@@ -1108,8 +1266,8 @@ input:focus {
 
 .lora_catd_content {
     position: fixed;
-    width: 450px;
-    height: 330px;
+    width: 520px;
+    height: 400px;
     z-index: 999999999;
     border: 1px solid var(--weilin-prompt-ui-border-color);
     border-radius: 4px;
@@ -1118,5 +1276,123 @@ input:focus {
     box-sizing: border-box;
     font-size: 0.55em;
     overflow: hidden;
+}
+
+/* 放大预览弹窗样式 */
+.preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2147483647;
+    /* 使用最大可能的 z-index 值 */
+    cursor: zoom-out;
+    pointer-events: auto;
+    /* 确保 Teleport 后的元素也能继承 scoped 样式 */
+}
+
+.preview-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    z-index: 2147483648;
+    /* 比 overlay 更高 */
+}
+
+.preview-click-area {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    cursor: zoom-out;
+}
+
+.preview-close-btn {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 2147483649;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.preview-close-btn:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: scale(1.1);
+}
+
+.preview-hint {
+    position: fixed;
+    top: 112px;
+    right: 20px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 2147483649;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 6px 12px;
+    border-radius: 4px;
+}
+
+.preview-content-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    will-change: transform;
+}
+
+.preview-content-wrapper.is-scaling {
+    transition: transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.preview-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.preview-content img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-drag: none;
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+.preview-content img:active {
+    cursor: grabbing;
+}
+
+.preview-content-wrapper.is-dragging img {
+    transition: none;
 }
 </style>

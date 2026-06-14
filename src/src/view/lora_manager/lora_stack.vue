@@ -120,7 +120,8 @@ const handleMouseHover = (fileName, event) => {
     const hoveredCard = event.currentTarget;
     const cardRect = hoveredCard.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
-    const cardWidth = 450;
+    const cardWidth = 520;  // 更新为新的窗口宽度
+    const cardHeight = 400; // 新的窗口高度
 
     // 默认显示在左侧
     let position = {
@@ -133,8 +134,13 @@ const handleMouseHover = (fileName, event) => {
         position.left = cardRect.right + 10;
     }
 
+    // 确保不会超出视口右侧
+    if (position.left + cardWidth > viewportWidth - 10) {
+        position.left = viewportWidth - cardWidth - 10;
+    }
+
     // 确保不会超出视口顶部和底部
-    position.top = Math.max(10, Math.min(position.top, window.innerHeight - 310));
+    position.top = Math.max(10, Math.min(position.top, window.innerHeight - cardHeight - 10));
 
     paddingLeftValue.value = position.left;
     paddingTopValue.value = position.top;
@@ -150,6 +156,11 @@ const handleMouseHover = (fileName, event) => {
 const handleMouseLeave = () => {
     isHovering.value = false;
     setTimeout(() => {
+        // 如果预览放大弹窗打开，不关闭悬浮窗口
+        if (loraCardItem.value?.previewVisible) {
+            isHovering.value = true;
+            return;
+        }
         if (!isEnterCatd.value && !isHovering.value) {
             showCard.value = false;
             hoveFileName.value = "";
@@ -165,6 +176,8 @@ const handEnterCard = () => {
 }
 
 const handleEnterLeave = () => {
+    // 如果预览放大弹窗打开，不关闭悬浮窗口
+    if (loraCardItem.value?.previewVisible) return;
     showCard.value = false;
     hoveFileName.value = "";
     isEnterCatd.value = false;
