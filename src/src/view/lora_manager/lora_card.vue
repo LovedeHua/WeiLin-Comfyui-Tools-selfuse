@@ -1271,7 +1271,6 @@ defineExpose({
     color: var(--weilin-prompt-ui-button-text);
     cursor: pointer;
     transition: all 0.3s;
-    font-size: 0.55em;
 }
 
 .edit-btn:hover,

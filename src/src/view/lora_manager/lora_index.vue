@@ -118,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { loraApi } from '@/api/lora'
 import loraDetail from './lora_detail.vue'
@@ -203,6 +203,12 @@ const handEnterCard = () => {
 const handleMouseHover = (fileName, event) => {
   if (!showHoverInfo.value || showHoverInfo.value == "false") return;
 
+  // 如果当前悬浮窗口有选中文本，不切换到其他lora
+  const selection = window.getSelection();
+  if (selection && selection.toString().length > 0 && showCard.value) {
+    return;
+  }
+
   isHovering.value = true;
   if (hoveFileName.value === fileName && showCard.value) return;
 
@@ -265,7 +271,7 @@ const handleMouseLeave = () => {
       hoveFileName.value = "";
       isEnterCatd.value = false;
     }
-  }, 200)
+  }, 80)
 }
 
 const handleEnterLeave = () => {
@@ -567,9 +573,42 @@ watch([currentCategory, currentSubCategory, searchQuery], () => {
   resetLoadingState()
 })
 
+// 全局点击事件：点击悬浮窗口外部时关闭
+const handleDocumentClick = (event) => {
+  // 如果悬浮窗口未显示，不处理
+  if (!showCard.value) return
+
+  // 如果预览放大弹窗打开，不关闭
+  if (loraCardItem.value?.previewVisible) return
+
+  // 如果悬浮窗口内有选中文本，不关闭
+  const selection = window.getSelection();
+  if (selection && selection.toString().length > 0) {
+    return;
+  }
+
+  // 获取悬浮窗口元素
+  const cardEl = loraCardItem.value?.$el
+  if (!cardEl) return
+
+  // 检查点击是否在悬浮窗口内部
+  if (!cardEl.contains(event.target)) {
+    showCard.value = false
+    hoveFileName.value = ""
+    isEnterCatd.value = false
+    isHovering.value = false
+  }
+}
+
 // 组件挂载时加载数据
 onMounted(() => {
   refreshList()
+  document.addEventListener('click', handleDocumentClick, true)
+})
+
+// 组件卸载时移除事件监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleDocumentClick, true)
 })
 
 // 选择Lora
