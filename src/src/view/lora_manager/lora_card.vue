@@ -572,7 +572,7 @@ const copyToClipboard = (text) => {
 
 // 计算属性
 const civitaiLink = computed(() => {
-    return loraInfo.value.links?.find(link => link.includes('civitai.com/models') || link.includes('civitai.red/models'))
+    return loraInfo.value.links?.find(link => link.includes('civitai.red/models'))
 })
 
 const isCivitaiNotFound = computed(() => {
