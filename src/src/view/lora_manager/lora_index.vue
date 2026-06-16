@@ -62,11 +62,11 @@
       </div>
 
       <div :class="`${prefix}lora-list`"
-        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px;">
+        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px;">
         <div v-for="lora in paginatedLoraList" :key="lora.file_path" :class="`${prefix}lora-card`" ref="loraCardRef"
           @click="openLoraDetail(lora)" @mouseover="(e) => handleMouseHover(lora.name, e)"
           @mouseleave="handleMouseLeave"
-          style="display: flex; flex-direction: column; min-height: 200px; cursor: pointer;">
+          style="display: flex; flex-direction: column; min-height: 180px; cursor: pointer;">
           <div :class="`${prefix}lora-preview`"
             style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden;width: 100%;">
             <video v-if="lora.preview && isVideoPreview(lora.preview)" :src="lora.preview" autoplay muted loop playsinline
@@ -81,16 +81,17 @@
               </svg>
             </div>
           </div>
-          <div :class="`${prefix}lora-name`" style="padding: 8px; text-align: center;
+          <div :class="`${prefix}lora-name`" style="padding: 4px; text-align: center;
             word-break: break-word;
             white-space: normal;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            min-height: 40px;
-            max-height: 40px; /* 添加固定高度 */
+            min-height: 36px;
+            max-height: 36px;
             line-height: 1.2;
+            font-size: 13px;
             text-overflow: ellipsis;"> <!-- 添加文本溢出省略号 -->
             {{ retLoraName(lora) }}
           </div>
@@ -111,7 +112,7 @@
 
     <loraDetail ref="loraDetailRef" />
     <LoraCard ref="loraCardItem" v-if="showCard" :fileNmae="hoveFileName" :paddingLeft="paddingLeftValue"
-      :paddingTop="paddingTopValue" @cardLeave="handleEnterLeave" @cardenter="handEnterCard" />
+      :paddingTop="paddingTopValue" @cardLeave="handleEnterLeave" @cardenter="handEnterCard" @openDetail="handleOpenDetail" />
 
   </div>
 </template>
@@ -252,6 +253,11 @@ const handleMouseHover = (fileName, event) => {
 
 
 const handleMouseLeave = () => {
+  // 检查是否正在选中文本，如果是则不关闭
+  const selection = window.getSelection();
+  if (selection && selection.toString().length > 0) {
+    return;
+  }
   isHovering.value = false;
   setTimeout(() => {
     if (!isEnterCatd.value && !isHovering.value) {
@@ -263,9 +269,18 @@ const handleMouseLeave = () => {
 }
 
 const handleEnterLeave = () => {
+  // 如果卡片内有选中文本，延迟关闭（等选区清除后再关）
+  const selection = window.getSelection()
+  if (selection && selection.toString().length > 0) {
+    return
+  }
   showCard.value = false;
   hoveFileName.value = "";
   isEnterCatd.value = false;
+}
+
+const handleOpenDetail = (loraData) => {
+  loraDetailRef.value.open(loraData)
 }
 
 const folderList = ref([])
@@ -616,7 +631,10 @@ const addLoraTag = (loraData) => {
 
 const isVideoPreview = (preview) => {
   if (!preview) return false
-  return preview.startsWith('data:video/') || preview.toLowerCase().endsWith('.mp4')
+  return preview.startsWith('data:video/') || 
+         preview.toLowerCase().endsWith('.mp4') ||
+         preview.toLowerCase().includes('.mp4') ||
+         preview.toLowerCase().includes('fmt=mp4')
 }
 
 defineExpose({
@@ -632,6 +650,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 600px;
+  /* 确保最小高度能显示2.5行卡片 */
 }
 
 .weilin_prompt_ui_lora-manager-container {
@@ -643,9 +663,10 @@ defineExpose({
   overflow-y: auto;
   position: relative;
   padding-right: 8px;
+  padding-bottom: 10px;
   box-sizing: border-box;
-  min-height: 620px;
-  /* 增大最小高度以容纳2.5行卡片 */
+  min-height: 520px;
+  /* 增大最小高度以容纳2.5行卡片 (180px * 2.5 + gap + padding) */
 }
 
 .weilin_prompt_ui_lora-list-container::-webkit-scrollbar {
@@ -671,7 +692,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-bottom: 16px;
+  padding-bottom: 80px;
   padding-top: 5px;
 }
 
@@ -951,9 +972,9 @@ defineExpose({
   background: var(--weilin-prompt-ui-primary-bg);
   transition: all 0.3s ease;
   overflow: hidden;
-  aspect-ratio: 1/1.5;
-  /* 调整比例让卡片更高 */
-  min-height: 220px;
+  aspect-ratio: 1/1.45;
+  /* 调整比例 */
+  min-height: 180px;
   /* 增大卡片最小高度 */
 }
 
@@ -970,7 +991,7 @@ defineExpose({
 
 .weilin_prompt_ui_lora-name {
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
   color: var(--weilin-prompt-ui-primary-text);
   word-break: break-word;
   white-space: normal;

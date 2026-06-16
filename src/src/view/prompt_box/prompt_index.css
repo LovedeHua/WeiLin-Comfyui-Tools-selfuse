@@ -506,11 +506,11 @@
     margin-top: 1px;
     padding: 6px;
     box-sizing: border-box;
-    max-height: 800px;
-    /* 增大最大高度以容纳更多卡片 */
+    max-height: 650px;
+    /* 增大最大高度以容纳2.5行卡片 */
     min-height: 520px;
-    /* 增大最小高度以显示2.5行卡片 */
-    overflow: hidden;
+    /* 确保最小高度能显示2.5行 (180px * 2.5 + gap + padding) */
+    overflow: auto;
     display: flex;
     flex-direction: column;
 }

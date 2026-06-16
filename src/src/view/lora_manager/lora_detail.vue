@@ -12,9 +12,24 @@
                     </svg>
                 </div>
 
-                <div class="lora-detail__body">
+                <input
+            ref="fileInput"
+            type="file"
+            accept="image/*,video/*"
+            style="display: none"
+            @change="handleLocalFileChange"
+        />
+        <div class="lora-detail__body">
                     <!-- 标题 -->
-                    <div class="lora-detail__title">Lora 信息</div>
+                    <div class="lora-detail__title-area">
+                            <div class="lora-detail__title">Lora 信息</div>
+                            <div class="local-cover-btn" @click="triggerFileSelect" title="选择本地图片/视频作为封面">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H8l4-4 4 4h-2z"/>
+                                </svg>
+                                <span>本地封面</span>
+                            </div>
+                        </div>
 
                     <!-- 标签区域 -->
                     <ul class="lora-detail__tags">
@@ -255,7 +270,7 @@
                                     <div class="image-action" @click="saveLoraImg(img.url)">
                                         设置为Lora封面
                                     </div>
-                                    <video v-if="isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;" />
+                                    <video v-if="img.type === 'video' || isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;" />
                                     <img v-else :src="img.url" />
                                 </div>
 
@@ -331,6 +346,8 @@ const loading = ref(false)
 const loraInfo = ref({})
 const isOpen = ref(false)
 const loraContent = ref()
+const fileInput = ref(null)
+const loraFile = ref('')
 
 
 const userEditFields = ref({}) // 用户自定义字段
@@ -530,6 +547,7 @@ const init = () => {
         .then((res) => {
             // console.log(res.data.data)
             loraInfo.value = res.data;
+            loraFile.value = loraInfo.value.file || '';
             nextTick(function () {
                 var _j, _k, _u, _v, _w, _x;
                 loraInfo.value.name =
@@ -607,12 +625,53 @@ const saveLoraImg = async (url) => {
     } catch (error) {
         message({ type: "warn", str: 'message.unknownError' });
     }
+
+
+// 本地文件选择
+const triggerFileSelect = () => {
+    if (fileInput.value) {
+        fileInput.value.click()
+    }
+}
+
+const handleLocalFileChange = async (event) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    const fileName = file.name
+
+    if (!loraFile.value) {
+        loraFile.value = loraInfo.value.file || ''
+    }
+    if (!loraFile.value) {
+        message({ type: "warn", str: 'message.unknownError' })
+        return
+    }
+
+    try {
+        loading.value = true
+        await loraApi.postUplaodImg(file, loraFile.value, fileName)
+        message({ type: "success", str: 'message.saveSuccess' })
+        // 刷新详情以显示新的封面
+        refreshLoraInfo()
+    } catch (error) {
+        console.error('上传本地封面失败:', error)
+        message({ type: "warn", str: 'message.unknownError' })
+    } finally {
+        loading.value = false
+        // 清空 input 以便可以再次选择同一文件
+        if (fileInput.value) {
+            fileInput.value.value = ''
+        }
+    }
+}
 }
 
 
 // 计算属性
 const civitaiLink = computed(() => {
-    return loraInfo.value.links?.find(link => link.includes('civitai.com/models'))
+    return loraInfo.value.links?.find(link => link.includes('civitai.red/models'))
 })
 
 const isCivitaiNotFound = computed(() => {
@@ -939,7 +998,10 @@ const toggleCollapse = () => {
 
 const isVideoUrl = (url) => {
     if (!url) return false
-    return url.startsWith('data:video/') || url.toLowerCase().endsWith('.mp4')
+    return url.startsWith('data:video/') || 
+           url.toLowerCase().endsWith('.mp4') ||
+           url.toLowerCase().includes('.mp4') ||
+           url.toLowerCase().includes('fmt=mp4')
 }
 
 </script>
@@ -957,6 +1019,45 @@ const isVideoUrl = (url) => {
     align-items: center;
     justify-content: center;
     color: var(--weilin-prompt-ui-primary-text);
+}
+
+/* 标题区域：标题和按钮并排 */
+.lora-detail__title-area {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+/* 选择本地封面按钮 */
+.local-cover-btn {
+    position: relative;
+    width: auto;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 14px;
+    background-color: rgba(187, 187, 187, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+    color: var(--weilin-prompt-ui-primary-text);
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.local-cover-btn:hover {
+    background-color: var(--weilin-prompt-ui-primary-color);
+    color: #fff;
+}
+
+.local-cover-btn svg {
+    fill: currentColor;
 }
 
 .lora-detail__content {

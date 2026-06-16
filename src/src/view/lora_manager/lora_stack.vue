@@ -178,6 +178,11 @@ const handEnterCard = () => {
 const handleEnterLeave = () => {
     // 如果预览放大弹窗打开，不关闭悬浮窗口
     if (loraCardItem.value?.previewVisible) return;
+    // 如果卡片内有选中文本，不关闭
+    const selection = window.getSelection()
+    if (selection && selection.toString().length > 0) {
+        return
+    }
     showCard.value = false;
     hoveFileName.value = "";
     isEnterCatd.value = false;

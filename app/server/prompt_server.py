@@ -78,13 +78,13 @@ async def _get_lora_folder_list(request):
 
 
 @PromptServer.instance.routes.post(baseUrl+"get_lora_list_by_range")
-async def _get_lora_folder_list(request):
+async def _get_lora_list_by_range(request):
     data = await request.json()
     return web.json_response({"data": await get_rang_for_extra_networks(data["range"])})
 
 
 @PromptServer.instance.routes.post(baseUrl+"get_lora_list_by_search")
-async def _get_lora_folder_list(request):
+async def _get_lora_list_by_search(request):
     data = await request.json()
     return web.json_response({"data": await search_lora_files(data["search"])})
 
@@ -170,14 +170,27 @@ async def _refresh_get_loras_info(request):
 async def _api_get_loras_info_img(request):
     """ Returns an image response if one exists for the lora. """
     lora_file = get_param(request, 'file')
+    if not lora_file:
+        api_response = {}
+        api_response['status'] = '404'
+        api_response['error'] = 'No Lora file provided'
+        return web.json_response(api_response)
+
     lora_path = folder_paths.get_full_path("loras", lora_file)
-    if not path_exists(lora_path):
-        lora_path = os.path.abspath(lora_path)
+    if not lora_path or not path_exists(lora_path):
+        lora_path = os.path.abspath(lora_path) if lora_path else None
+        if not lora_path or not path_exists(lora_path):
+            api_response = {}
+            api_response['status'] = '404'
+            api_response['error'] = 'No Lora found at path'
+            return web.json_response(api_response)
 
     img_path = None
-    for ext in ['jpg', 'png', 'jpeg', 'gif']:
+    for ext in ['jpg', 'png', 'jpeg', 'gif', 'mp4']:
         try_path = f'{os.path.splitext(lora_path)[0]}.{ext}'
         if path_exists(try_path):
+            if ext == 'mp4':
+                return web.FileResponse(try_path, headers={'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes'})
             img_path = try_path
             break
 
@@ -1110,7 +1123,7 @@ async def _update_ai_server_settings(request):
 
 
 @PromptServer.instance.routes.post(baseUrl+"ai_server/get_ai_models")
-def _get_ai_server_get_ai_models(request):
+async def _get_ai_server_get_ai_models(request):
     return web.json_response({"data": getModelList()})
 
 
@@ -1207,6 +1220,95 @@ async def _save_tag_labels(request):
 
 print("======== WeiLin插件服务已启动 ========")
 print("======== WeiLin Server Init ========")
+
+
+# ============================================ 热重载支持 ============================================
+
+@PromptServer.instance.routes.post(baseUrl+"reload/lora_modules")
+async def _reload_lora_modules(request):
+    """
+    热重载 Lora 相关模块，无需重启 ComfyUI
+    POST /weilin/prompt_ui/api/reload/lora_modules
+    """
+    try:
+        import importlib
+        import sys
+
+        # 需要重载的模块路径
+        modules_to_reload = [
+            'ComfyUI.custom_nodes.WeiLin-Comfyui-Tools-selfuse.app.server.prompt_api.lora_info',
+            'ComfyUI.custom_nodes.WeiLin-Comfyui-Tools-selfuse.app.server.prompt_api.lora_networks',
+        ]
+
+        reloaded = []
+        errors = []
+
+        for module_name in modules_to_reload:
+            # 尝试多种可能的模块名
+            possible_names = [
+                module_name,
+                module_name.replace('ComfyUI.custom_nodes.', ''),
+                'custom_nodes.WeiLin-Comfyui-Tools-selfuse.app.server.prompt_api.lora_info',
+                'custom_nodes.WeiLin-Comfyui-Tools-selfuse.app.server.prompt_api.lora_networks',
+                'WeiLin-Comfyui-Tools-selfuse.app.server.prompt_api.lora_info',
+                'WeiLin-Comfyui-Tools-selfuse.app.server.prompt_api.lora_networks',
+                'app.server.prompt_api.lora_info',
+                'app.server.prompt_api.lora_networks',
+            ]
+
+            found = False
+            for name in possible_names:
+                if name in sys.modules:
+                    try:
+                        importlib.reload(sys.modules[name])
+                        reloaded.append(name)
+                        found = True
+                        break
+                    except Exception as e:
+                        errors.append(f"Failed to reload {name}: {e}")
+                        found = True
+                        break
+
+            if not found:
+                errors.append(f"Module {module_name} not found in sys.modules")
+
+        # 也尝试直接从文件路径重新加载
+        try:
+            import os
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            lora_info_path = os.path.join(current_dir, 'prompt_api', 'lora_info.py')
+            lora_networks_path = os.path.join(current_dir, 'prompt_api', 'lora_networks.py')
+
+            # 使用 exec 重新执行文件
+            if os.path.exists(lora_info_path):
+                with open(lora_info_path, 'r', encoding='utf-8') as f:
+                    exec(compile(f.read(), lora_info_path, 'exec'), globals())
+                reloaded.append('lora_info (via exec)')
+
+            if os.path.exists(lora_networks_path):
+                with open(lora_networks_path, 'r', encoding='utf-8') as f:
+                    exec(compile(f.read(), lora_networks_path, 'exec'), globals())
+                reloaded.append('lora_networks (via exec)')
+
+        except Exception as e:
+            errors.append(f"Exec reload failed: {e}")
+
+        return web.json_response({
+            "code": 200,
+            "reloaded": reloaded,
+            "errors": errors,
+            "message": "Modules reloaded. Please refresh browser to see changes."
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return web.json_response({
+            "code": 500,
+            "error": str(e),
+            "message": "Reload failed"
+        }, status=500)
+
+# =====================================================================================================
 
 
 def go_run_node_auto_random_tag(name):

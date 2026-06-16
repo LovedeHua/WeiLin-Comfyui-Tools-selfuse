@@ -1,3 +1,4 @@
+import urllib.parse
 import folder_paths
 import os
 import json
@@ -5,6 +6,33 @@ import re
 import hashlib
 import requests
 from datetime import datetime
+
+
+def _is_network_available():
+  """
+  检测网络是否可用，以能否访问 Civitai API 为准。
+  使用缓存避免频繁请求，5分钟内只检测一次。
+  """
+  try:
+    import time
+    if hasattr(_is_network_available, '_last_check'):
+      last_check_time, last_result = _is_network_available._last_check
+      if time.time() - last_check_time < 300:
+        return last_result
+    
+    response = requests.get('https://civitai.red/api/v1/models', timeout=(3, 5))
+    result = response.status_code == 200
+    
+    _is_network_available._last_check = (time.time(), result)
+    return result
+  except Exception:
+    try:
+      import time
+      _is_network_available._last_check = (time.time(), False)
+    except Exception:
+      pass
+    return False
+
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 USERDATA = os.path.join(THIS_DIR, '../../../', 'lora_userdatas')
@@ -20,10 +48,10 @@ def image_upload(post, image_save_function=None):
   if not path_exists(lora_path):
     lora_path = os.path.abspath(lora_path)
 
-  for ext in ['jpg', 'png', 'jpeg', 'gif']:
+  for ext in ['jpg', 'png', 'jpeg', 'gif', 'mp4']:
     try_path = f'{os.path.splitext(lora_path)[0]}.{ext}'
     if path_exists(try_path):
-      os.remove(try_path) #删除已经存在的图片
+      os.remove(try_path)
   
   file_name_with_extension = os.path.basename(lora_path)
   file_namea, _ = os.path.splitext(file_name_with_extension)
@@ -50,11 +78,9 @@ def image_upload(post, image_save_function=None):
 
 def get_param(request, param, default=None):
   """Gets a param from a request."""
-  # return request.rel_url.query[param] if param in request.rel_url.query else default
   if param in request.rel_url.query:
       value = request.rel_url.query[param]
       try:
-          # 尝试URL解码特殊字符
           import urllib.parse
           return urllib.parse.unquote(value)
       except:
@@ -149,7 +175,6 @@ def load_json_file(file: str, default=None):
 def _update_data(info_data: dict) -> bool:
   """Ports old data to new data if necessary."""
   should_save = False
-  # If we have "triggerWords" then move them over to "trainedWords"
   if 'triggerWords' in info_data and len(info_data['triggerWords']) > 0:
     civitai_words = ','.join((get_dict_value(info_data, 'raw.civitai.triggerWords', default=[]) +
                               get_dict_value(info_data, 'raw.civitai.trainedWords', default=[])))
@@ -170,6 +195,7 @@ def _update_data(info_data: dict) -> bool:
     should_save = True
   return should_save
 
+
 async def get_model_info(file: str,
                          model_type="loras",
                          default=None,
@@ -186,9 +212,11 @@ async def get_model_info(file: str,
 
   info_data = {}
   should_save = False
-  # Try to load a weilin-info.json file next to the file.
+  
   try_info_path = f'{file_path}.weilin-info.json'
-  if path_exists(try_info_path):
+  local_info_exists = path_exists(try_info_path)
+  
+  if local_info_exists:
     info_data = load_json_file(try_info_path)
 
   if 'file' not in info_data:
@@ -198,10 +226,8 @@ async def get_model_info(file: str,
     info_data['path'] = file_path
     should_save = True
 
-  # Check if we have an image next to the file and, if so, add it to the front of the images
-  # (if it isn't already).
   img_next_to_file = None
-  for ext in ['jpg', 'png', 'jpeg']:
+  for ext in ['jpg', 'png', 'jpeg', 'mp4']:
     try_path = f'{os.path.splitext(file_path)[0]}.{ext}'
     if path_exists(try_path):
       img_next_to_file = try_path
@@ -213,15 +239,22 @@ async def get_model_info(file: str,
 
   if img_next_to_file:
     is_video = img_next_to_file.lower().endswith('.mp4')
-    img_next_to_file_url = f'/weilin/prompt_ui/api/lorainfo/api/loras/img?file={file}'
-    if len(info_data['images']) == 0 or info_data['images'][0]['url'] != img_next_to_file_url:
-      info_data['images'].insert(0, {'url': img_next_to_file_url})
-      should_save = True
+    img_next_to_file_url = f'/weilin/prompt_ui/api/lorainfo/api/loras/img?file={urllib.parse.quote(file, safe="")}'
+    info_data['images'] = [img for img in info_data['images'] if 'lorainfo/api/loras/img' not in img.get('url', '')]
+    img_data = {'url': img_next_to_file_url}
+    if is_video:
+      img_data['type'] = 'video'
+    info_data['images'].insert(0, img_data)
+    should_save = True
 
-  # If we just want light data then bail now with just existing data, plus file, path and img if
-  # next to the file.
   if light and not maybe_fetch_metadata and not force_fetch_metadata and not maybe_fetch_civitai and not force_fetch_civitai:
     return info_data
+
+  # 当 light=False 且没有明确禁止时，默认获取 Civitai 数据
+  if not light and not maybe_fetch_civitai and not force_fetch_civitai:
+    maybe_fetch_civitai = True
+  if not light and not maybe_fetch_metadata and not force_fetch_metadata:
+    maybe_fetch_metadata = True
 
   if 'raw' not in info_data:
     info_data['raw'] = {}
@@ -229,9 +262,15 @@ async def get_model_info(file: str,
 
   should_save = _update_data(info_data) or should_save
 
-  should_fetch_civitai = force_fetch_civitai is True or (maybe_fetch_civitai is True and
+  if local_info_exists and not force_fetch_civitai and not force_fetch_metadata:
+    maybe_fetch_civitai = False
+    maybe_fetch_metadata = False
+
+  network_available = _is_network_available()
+  
+  should_fetch_civitai = force_fetch_civitai is True or (maybe_fetch_civitai is True and network_available and
                                                          ('civitai' not in info_data['raw'] or len(info_data['raw']['civitai']) == 0))
-  should_fetch_metadata = force_fetch_metadata is True or (maybe_fetch_metadata is True and
+  should_fetch_metadata = force_fetch_metadata is True or (maybe_fetch_metadata is True and network_available and
                                                            ('metadata' not in info_data['raw'] or len(info_data['raw']['metadata']) == 0))
 
   if should_fetch_metadata:
@@ -239,6 +278,8 @@ async def get_model_info(file: str,
                                     model_type=model_type,
                                     default={},
                                     refresh=force_fetch_metadata)
+    if data_meta is None:
+      data_meta = {}
     should_save = _merge_metadata(info_data, data_meta) or should_save
 
   if should_fetch_civitai:
@@ -246,6 +287,8 @@ async def get_model_info(file: str,
                                            model_type=model_type,
                                            default={},
                                            refresh=force_fetch_civitai)
+    if data_civitai is None:
+      data_civitai = {}
     should_save = _merge_civitai_data(info_data, data_civitai) or should_save
 
   if 'sha256' not in info_data:
@@ -254,57 +297,78 @@ async def get_model_info(file: str,
       info_data['sha256'] = file_hash
       should_save = True
   
-  if len(info_data['images']) != 0 and file not in info_data['images'][0]['url']: # 未设置封面
-    file_name = os.path.basename(file)
-    url = next(filter(lambda x: x['type'] == 'image', info_data['images']), {}).get('url')
-    download_image(url=url, filename=file_name, directory=os.path.dirname(file_path))
+  # 检查是否已有本地封面
+  has_local_cover = False
+  for img in info_data.get('images', []):
+    if isinstance(img, dict):
+      img_url = img.get('url', '')
+      if 'lorainfo/api/loras/img' in img_url or img_url.startswith('data:'):
+        has_local_cover = True
+        break
+
+  # 没有本地封面时才尝试下载
+  if not has_local_cover and len(info_data.get('images', [])) > 0:
+    first_img = info_data['images'][0]
+    is_video = isinstance(first_img, dict) and first_img.get('type') == 'video'
+    if not is_video:
+      file_name = os.path.basename(file)
+      url = None
+      for img in info_data['images']:
+        if isinstance(img, dict) and img.get('type') == 'image':
+          url = img.get('url')
+          break
+      if url is None and isinstance(first_img, dict):
+        url = first_img.get('url')
+      
+      if url and isinstance(url, str) and url.startswith('http') and network_available:
+        download_image(url=url, filename=file_name, directory=os.path.dirname(file_path))
 
   if should_save:
     if 'trainedWords' in info_data:
-      # Sort by count; if it doesn't exist, then assume it's a top item from civitai or elsewhere.
       info_data['trainedWords'] = sorted(info_data['trainedWords'],
                                          key=lambda w: w['count'] if 'count' in w else 99999,
                                          reverse=True)
     save_model_info(file, info_data, model_type=model_type)
-
-    # If we're saving, then the UI is likely waiting to see if the refreshed data is coming in.
-    # await PromptServer.instance.send("weilin-refreshed-lora-info", {"data": info_data})
   
-
   return info_data
+
 
 def download_image(url, filename, directory):
     try:
-        # 安全处理文件名
         filename = filename.encode('utf-8', 'ignore').decode('utf-8')
         _, ext = os.path.splitext(url)
         filename, _ = os.path.splitext(filename)
         filepath = os.path.join(directory, f"{filename}{ext}")
 
         try:
-            resp = requests.get(url, stream=True)
+            resp = requests.get(url, stream=True, timeout=(5, 15))
             resp.raise_for_status()
             with open(filepath, 'wb') as f:
                 for chunk in resp.iter_content(chunk_size=4096):
                     f.write(chunk)
+        except requests.exceptions.Timeout:
+            print(f"[WeiLin] 下载图片超时: {url}")
+        except requests.exceptions.ConnectionError:
+            print(f"[WeiLin] 下载图片网络错误: {url}")
         except Exception as e:
-            print(e)
-            if os.path.exists(filepath):
+            print(f"[WeiLin] 下载图片失败: {e}")
+        finally:
+            if os.path.exists(filepath) and os.path.getsize(filepath) == 0:
                 os.remove(filepath)
 
     except Exception as e:
-        print(f"文件名处理错误: {e}")
+        print(f"[WeiLin] 文件名处理错误: {e}")
 
 
 def _merge_metadata(info_data: dict, data_meta: dict) -> bool:
-  """Returns true if data was saved."""
+  if data_meta is None or not isinstance(data_meta, dict):
+    return False
   should_save = False
 
   base_model_file = get_dict_value(data_meta, 'ss_sd_model_name', None)
   if base_model_file:
     info_data['baseModelFile'] = base_model_file
 
-  # Loop over metadata tags
   trained_words = {}
   if 'ss_tag_frequency' in data_meta and isinstance(data_meta['ss_tag_frequency'], dict):
     for bucket_value in data_meta['ss_tag_frequency'].values():
@@ -318,7 +382,6 @@ def _merge_metadata(info_data: dict, data_meta: dict) -> bool:
     info_data['trainedWords'] = list(trained_words.values())
     should_save = True
   else:
-    # We can't merge, because the list may have other data, like it's part of civitaidata.
     merged_dict = {}
     for existing_word_data in info_data['trainedWords']:
       merged_dict[existing_word_data['word']] = existing_word_data
@@ -329,8 +392,6 @@ def _merge_metadata(info_data: dict, data_meta: dict) -> bool:
     info_data['trainedWords'] = list(merged_dict.values())
     should_save = True
 
-  # trained_words = list(trained_words.values())
-  # info_data['meta_trained_words'] = trained_words
   info_data['raw']['metadata'] = data_meta
   should_save = True
 
@@ -342,7 +403,8 @@ def _merge_metadata(info_data: dict, data_meta: dict) -> bool:
 
 
 def _merge_civitai_data(info_data: dict, data_civitai: dict) -> bool:
-  """Returns true if data was saved."""
+  if data_civitai is None or not isinstance(data_civitai, dict):
+    return False
   should_save = False
 
   if 'name' not in info_data:
@@ -359,7 +421,6 @@ def _merge_civitai_data(info_data: dict, data_civitai: dict) -> bool:
     info_data['baseModel'] = get_dict_value(data_civitai, 'baseModel')
     should_save = True
 
-  # We always want to merge triggerword.
   civitai_trigger = get_dict_value(data_civitai, 'triggerWords', default=[])
   civitai_trained = get_dict_value(data_civitai, 'trainedWords', default=[])
   civitai_words = ','.join(civitai_trigger + civitai_trained)
@@ -386,24 +447,23 @@ def _merge_civitai_data(info_data: dict, data_civitai: dict) -> bool:
 
   if 'modelId' in data_civitai:
     info_data['links'] = info_data['links'] if 'links' in info_data else []
-    civitai_link = f'https://civitai.com/models/{get_dict_value(data_civitai, "modelId")}'
+    civitai_link = f'https://civitai.red/models/{get_dict_value(data_civitai, "modelId")}'
     if get_dict_value(data_civitai, "id"):
       civitai_link += f'?modelVersionId={get_dict_value(data_civitai, "id")}'
     info_data['links'].append(civitai_link)
     info_data['links'].append(data_civitai['_civitai_api'])
     should_save = True
 
-  # Take images from civitai
   if 'images' in data_civitai:
     info_data_image_urls = list(map(lambda i: i['url']
-                                    if 'url' in i else None, info_data['images']))
+                                    if 'url' in i else None, info_data.get('images', [])))
     for img in data_civitai['images']:
       img_url = get_dict_value(img, 'url')
       if img_url is not None and img_url not in info_data_image_urls:
         img_id = os.path.splitext(os.path.basename(img_url))[0] if img_url is not None else None
         img_data = {
           'url': img_url,
-          'civitaiUrl': f'https://civitai.com/images/{img_id}' if img_id is not None else None,
+          'civitaiUrl': f'https://civitai.red/images/{img_id}' if img_id is not None else None,
           'width': get_dict_value(img, 'width'),
           'height': get_dict_value(img, 'height'),
           'type': get_dict_value(img, 'type'),
@@ -420,7 +480,6 @@ def _merge_civitai_data(info_data: dict, data_civitai: dict) -> bool:
         info_data['images'].append(img_data)
         should_save = True
 
-  # The raw data
   if 'civitai' not in info_data['raw']:
     info_data['raw']['civitai'] = data_civitai
     should_save = True
@@ -429,18 +488,17 @@ def _merge_civitai_data(info_data: dict, data_civitai: dict) -> bool:
 
 
 def _get_model_civitai_data(file: str, model_type="loras", default=None, refresh=False):
-  """Gets the civitai data, either cached from the user directory, or from civitai api."""
   file_hash = _get_sha256_hash(get_folder_path(file, model_type))
   if file_hash is None:
     return None
 
   json_file_path = _get_info_cache_file(file_hash, 'civitai')
 
-  api_url = f'https://civitai.com/api/v1/model-versions/by-hash/{file_hash}'
+  api_url = f'https://civitai.red/api/v1/model-versions/by-hash/{file_hash}'
   file_data = read_userdata_json(json_file_path)
   if file_data is None or refresh is True:
     try:
-      response = requests.get(api_url, timeout=5000)
+      response = requests.get(api_url, timeout=(5, 10))
       data = response.json()
       save_userdata_json(json_file_path, {
         'url': api_url,
@@ -448,8 +506,12 @@ def _get_model_civitai_data(file: str, model_type="loras", default=None, refresh
         'response': data
       })
       file_data = read_userdata_json(json_file_path)
-    except requests.exceptions.RequestException as e:  # This is the correct syntax
-      print(e)
+    except requests.exceptions.Timeout:
+      print(f"[WeiLin] Civitai API 请求超时: {file}")
+    except requests.exceptions.ConnectionError:
+      print(f"[WeiLin] Civitai API 网络错误: {file}")
+    except Exception as e:
+      print(f"[WeiLin] Civitai API 请求失败: {e}")
   response = file_data['response'] if file_data is not None and 'response' in file_data else None
   if response is not None:
     response['_sha256'] = file_hash
@@ -458,7 +520,6 @@ def _get_model_civitai_data(file: str, model_type="loras", default=None, refresh
 
 
 def _get_model_metadata(file: str, model_type="loras", default=None, refresh=False):
-  """Gets the metadata from the file itself."""
   file_path = get_folder_path(file, model_type)
   file_hash = _get_sha256_hash(file_path)
   if file_hash is None:
@@ -479,13 +540,10 @@ def _get_model_metadata(file: str, model_type="loras", default=None, refresh=Fal
 
 
 def _read_file_metadata_from_header(file_path: str) -> dict:
-  """Reads the file's header and returns a JSON dict metdata if available."""
   data = None
   try:
     if file_path.endswith('.safetensors'):
       with open(file_path, "rb") as file:
-        # https://github.com/huggingface/safetensors#format
-        # 8 bytes: N, an unsigned little-endian 64-bit integer, containing the size of the header
         header_size = int.from_bytes(file.read(8), "little", signed=False)
 
         if header_size <= 0:
@@ -506,15 +564,14 @@ def _read_file_metadata_from_header(file_path: str) -> dict:
                 data[key] = value_as_json
               except Exception:
                 print(f'metdata for field {key} did not parse as json')
-  except requests.exceptions.RequestException as e:
-    print(e)
+  except Exception as e:
+    print(f"[WeiLin] 读取文件元数据失败: {e}")
     data = None
 
   return data
 
 
 def get_folder_path(file: str, model_type="loras"):
-  """Gets the file path ensuring it exists."""
   file_path = folder_paths.get_full_path(model_type, file)
   if file_path and not path_exists(file_path):
     file_path = os.path.abspath(file_path)
@@ -524,13 +581,11 @@ def get_folder_path(file: str, model_type="loras"):
 
 
 def _get_sha256_hash(file_path: str):
-  """Returns the hash for the file."""
   if not file_path or not path_exists(file_path):
     return None
   file_hash = None
   sha256_hash = hashlib.sha256()
   with open(file_path, "rb") as f:
-    # Read and update hash string value in blocks of 4K
     for byte_block in iter(lambda: f.read(4096), b""):
       sha256_hash.update(byte_block)
     file_hash = sha256_hash.hexdigest()
@@ -538,14 +593,12 @@ def _get_sha256_hash(file_path: str):
 
 
 async def set_model_info_partial(file: str, info_data_partial, model_type="loras"):
-  """Sets partial data into the existing model info data."""
   info_data = await get_model_info(file, model_type=model_type, default={})
   info_data = {**info_data, **info_data_partial}
   save_model_info(file, info_data, model_type=model_type)
 
 
 def save_model_info(file: str, info_data, model_type="loras"):
-  """Saves the model info alongside the model itself."""
   file_path = get_folder_path(file, model_type)
   if file_path is None:
     return
@@ -553,27 +606,17 @@ def save_model_info(file: str, info_data, model_type="loras"):
   save_json_file(try_info_path, info_data)
 
 async def remove_user_diy_fields(file: str, fields_to_remove, model_type="loras"):
-    """
-    从模型的user_diy_fields中删除指定字段
-    
-    参数:
-        file: 模型文件名
-        fields_to_remove: 要删除的字段名，可以是字符串或字符串列表
-        model_type: 模型类型，默认为"loras"
-    """
     info_data = await get_model_info(file, model_type=model_type, default={})
     
-    if 'user_diy_fileds' not in info_data:  # 修正拼写错误
+    if 'user_diy_fileds' not in info_data:
       return False
 
     if isinstance(fields_to_remove, str):
       fields_to_remove = [fields_to_remove]
     
-    # print(fields_to_remove)
     removed = False
     for field in fields_to_remove:
       if field in info_data['user_diy_fileds']:
-        # print(f'删除字段: {field}')
         del info_data['user_diy_fileds'][field]
         removed = True
     
@@ -584,7 +627,8 @@ async def remove_user_diy_fields(file: str, fields_to_remove, model_type="loras"
 
 
 def get_dict_value(data: dict, dict_key: str, default=None):
-  """ Gets a deeply nested value given a dot-delimited key."""
+  if data is None or not isinstance(data, dict):
+    return default
   keys = dict_key.split('.')
   key = keys.pop(0) if len(keys) > 0 else None
   found = data[key] if key in data else None
@@ -593,19 +637,16 @@ def get_dict_value(data: dict, dict_key: str, default=None):
   return found if found is not None else default
 
 def read_userdata_json(rel_path: str):
-  """Reads a json file from the userdata directory."""
   file_path = clean_path(rel_path)
   return load_json_file(file_path)
 
 
 def save_userdata_json(rel_path: str, data: dict):
-  """Saves a json file from the userdata directory."""
   file_path = clean_path(rel_path)
   return save_json_file(file_path, data)
 
 
 def clean_path(rel_path: str):
-  """Cleans a relative path by splitting on forward slash and os.path.joining."""
   cleaned = USERDATA
   paths = rel_path.split('/')
   for path in paths:
@@ -614,14 +655,13 @@ def clean_path(rel_path: str):
 
 
 def save_json_file(file_path: str, data: dict):
-  """Saves a json file."""
   os.makedirs(os.path.dirname(file_path), exist_ok=True)
   with open(file_path, 'w+', encoding='UTF-8') as file:
     json.dump(data, file, sort_keys=False, indent=2, separators=(",", ": "))
 
 
 
-def _get_info_cache_file(data_type: str, file_hash: str):
+def _get_info_cache_file(file_hash: str, data_type: str):
   return f'info/{file_hash}.{data_type}.json'
 
 
@@ -630,7 +670,6 @@ async def delete_model_info(file: str,
                             del_info=True,
                             del_metadata=True,
                             del_civitai=True):
-  """Delete the info json, and the civitai & metadata caches."""
   file_path = get_folder_path(file, model_type)
   if file_path is None:
     return
@@ -649,7 +688,6 @@ async def delete_model_info(file: str,
 
 
 def delete_userdata_file(rel_path: str):
-  """Deletes a file from the userdata directory."""
   file_path = clean_path(rel_path)
   if os.path.isfile(file_path):
     os.remove(file_path)
