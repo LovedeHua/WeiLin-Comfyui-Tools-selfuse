@@ -249,7 +249,7 @@
 
 
                 <!-- 图片 -->
-                <ul class="lora-detail__images" v-if="loraInfo.images?.length" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                <ul class="lora-detail__images" v-if="loraInfo.images?.length" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; list-style: none; padding: 0; margin: 0;">
                     <li v-for="(img, index) in loraInfo.images" :key="index" class="lora-detail__image-item">
                         <div class="image-wrapper" style="height: 200px; cursor: zoom-in; position: relative;" @click="openPreview(img.url, img)">
                             <!-- 本地封面标志 -->
@@ -572,7 +572,7 @@ const copyToClipboard = (text) => {
 
 // 计算属性
 const civitaiLink = computed(() => {
-    return loraInfo.value.links?.find(link => link.includes('civitai.red/models'))
+    return loraInfo.value.links?.find(link => link.includes('civitai.com/models') || link.includes('civitai.red/models'))
 })
 
 const isCivitaiNotFound = computed(() => {
