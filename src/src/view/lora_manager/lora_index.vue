@@ -848,11 +848,9 @@ defineExpose({
   gap: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
-  min-height: 80px;
-  /* 增大最小高度以容纳2行目录 */
-  max-height: 120px;
-  /* 增大最大高度以容纳2行目录 */
-  overflow-y: auto;
+  /* 移除固定高度限制，让flex-wrap自由换行 */
+  align-content: flex-start;
+  /* 多行时顶部对齐 */
 }
 
 .weilin_prompt_ui_category-nav::-webkit-scrollbar {
@@ -881,6 +879,10 @@ defineExpose({
   color: var(--weilin-prompt-ui-primary-text);
   cursor: pointer;
   transition: all 0.3s ease;
+  white-space: nowrap;
+  /* 按钮文字不换行 */
+  flex-shrink: 0;
+  /* 按钮不被压缩 */
 }
 
 .weilin_prompt_ui_category-btn:hover {
@@ -900,10 +902,8 @@ defineExpose({
   margin-top: -8px;
   flex-wrap: wrap;
   padding-left: 16px;
-  min-height: 40px;
-  /* 确保与category-nav一致 */
-  max-height: 100px;
-  overflow-y: auto;
+  /* 移除固定高度限制，让flex-wrap自由换行 */
+  align-content: flex-start;
 }
 
 

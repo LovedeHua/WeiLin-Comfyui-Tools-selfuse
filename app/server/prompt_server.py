@@ -186,7 +186,7 @@ async def _api_get_loras_info_img(request):
             return web.json_response(api_response)
 
     img_path = None
-    for ext in ['jpg', 'png', 'jpeg', 'gif', 'mp4']:
+    for ext in ['jpg', 'png', 'jpeg', 'gif', 'webp', 'mp4']:
         try_path = f'{os.path.splitext(lora_path)[0]}.{ext}'
         if path_exists(try_path):
             if ext == 'mp4':
@@ -199,6 +199,10 @@ async def _api_get_loras_info_img(request):
         api_response['status'] = '404'
         api_response['error'] = 'No Lora found at path'
         return web.json_response(api_response)
+
+    # 为 webp 图片设置正确的 Content-Type
+    if img_path.lower().endswith('.webp'):
+        return web.FileResponse(img_path, headers={'Content-Type': 'image/webp'})
 
     return web.FileResponse(img_path)
 

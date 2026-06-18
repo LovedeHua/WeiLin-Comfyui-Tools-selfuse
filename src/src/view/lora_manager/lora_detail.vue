@@ -264,14 +264,26 @@
 
                     <!-- 图片 -->
                     <ul class="lora-detail__images" v-if="loraInfo.images?.length">
-                        <li v-for="(img, index) in loraInfo.images" :key="index" class="lora-detail__image-item">
+                        <li v-for="(img, index) in loraInfo.images" :key="img.url || index" class="lora-detail__image-item">
                             <figure>
                                 <div class="image-wrapper">
                                     <div class="image-action" @click="saveLoraImg(img.url)">
                                         设置为Lora封面
                                     </div>
-                                    <video v-if="img.type === 'video' || isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;" />
-                                    <img v-else :src="img.url" />
+                                    <!-- 视频元素 -->
+                                    <video
+                                        :src="img.url"
+                                        v-show="img.type === 'video' || isVideoUrl(img.url)"
+                                        autoplay muted loop playsinline
+                                        @mouseenter="handleCardEnter"
+                                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;"
+                                    />
+                                    <!-- 图片元素 -->
+                                    <img
+                                        :src="img.url"
+                                        v-show="!(img.type === 'video' || isVideoUrl(img.url))"
+                                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;"
+                                    />
                                 </div>
 
                                 <figcaption class="image-info">
@@ -998,10 +1010,13 @@ const toggleCollapse = () => {
 
 const isVideoUrl = (url) => {
     if (!url) return false
+    const urlLower = url.toLowerCase()
     return url.startsWith('data:video/') || 
-           url.toLowerCase().endsWith('.mp4') ||
-           url.toLowerCase().includes('.mp4') ||
-           url.toLowerCase().includes('fmt=mp4')
+           urlLower.endsWith('.mp4') ||
+           urlLower.includes('.mp4') ||
+           urlLower.includes('fmt=mp4') ||
+           urlLower.endsWith('.webm') ||
+           urlLower.endsWith('.mov')
 }
 
 </script>

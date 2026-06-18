@@ -48,7 +48,7 @@ def image_upload(post, image_save_function=None):
   if not path_exists(lora_path):
     lora_path = os.path.abspath(lora_path)
 
-  for ext in ['jpg', 'png', 'jpeg', 'gif', 'mp4']:
+  for ext in ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp']:
     try_path = f'{os.path.splitext(lora_path)[0]}.{ext}'
     if path_exists(try_path):
       os.remove(try_path)
@@ -226,9 +226,16 @@ async def get_model_info(file: str,
     info_data['path'] = file_path
     should_save = True
 
+  # 统一本地封面查找逻辑，与 preview_file 保持一致
+  # 扩展名列表和顺序必须与 preview_file 完全一致
+  img_extensions = ['.jpg', '.png', '.jpeg', '.gif', '.webp', '.mp4']
+  preview_extensions = [f'.preview{ext}' for ext in img_extensions]
+  # 合并：preview 版本优先于普通版本（与 preview_file 一致）
+  all_extensions = preview_extensions + img_extensions
+
   img_next_to_file = None
-  for ext in ['jpg', 'png', 'jpeg', 'mp4']:
-    try_path = f'{os.path.splitext(file_path)[0]}.{ext}'
+  for ext in all_extensions:
+    try_path = f'{os.path.splitext(file_path)[0]}{ext}'
     if path_exists(try_path):
       img_next_to_file = try_path
       break
@@ -238,12 +245,17 @@ async def get_model_info(file: str,
     should_save = True
 
   if img_next_to_file:
-    is_video = img_next_to_file.lower().endswith('.mp4')
-    img_next_to_file_url = f'/weilin/prompt_ui/api/lorainfo/api/loras/img?file={urllib.parse.quote(file, safe="")}'
+    # 根据实际文件扩展名判断类型（支持 .preview.mp4 等情况）
+    file_lower = img_next_to_file.lower()
+    is_video = file_lower.endswith('.mp4') or file_lower.endswith('.preview.mp4')
+    # 为mp4添加fmt=mp4参数，让前端能正确识别
+    img_next_to_file_url = f'/weilin/prompt_ui/api/lorainfo/api/loras/img?file={urllib.parse.quote(file, safe="")}{"&fmt=mp4" if is_video else ""}'
     info_data['images'] = [img for img in info_data['images'] if 'lorainfo/api/loras/img' not in img.get('url', '')]
     img_data = {'url': img_next_to_file_url}
     if is_video:
       img_data['type'] = 'video'
+    else:
+      img_data['type'] = 'image'
     info_data['images'].insert(0, img_data)
     should_save = True
 
@@ -337,12 +349,41 @@ def download_image(url, filename, directory):
     try:
         filename = filename.encode('utf-8', 'ignore').decode('utf-8')
         _, ext = os.path.splitext(url)
-        filename, _ = os.path.splitext(filename)
-        filepath = os.path.join(directory, f"{filename}{ext}")
+        filename_base, _ = os.path.splitext(filename)
 
         try:
             resp = requests.get(url, stream=True, timeout=(5, 15))
             resp.raise_for_status()
+
+            # 根据Content-Type判断实际文件类型，修正扩展名
+            content_type = resp.headers.get('Content-Type', '').lower()
+            if 'video' in content_type or 'mp4' in content_type:
+                ext = '.mp4'
+            elif 'image/jpeg' in content_type or 'image/jpg' in content_type:
+                ext = '.jpg'
+            elif 'image/png' in content_type:
+                ext = '.png'
+            elif 'image/gif' in content_type:
+                ext = '.gif'
+            elif 'image/webp' in content_type:
+                ext = '.webp'
+
+            # 如果URL没有扩展名且Content-Type也无法判断，根据URL内容猜测
+            if not ext:
+                url_lower = url.lower()
+                if any(url_lower.endswith(e) for e in ['.mp4', '.webm', '.mov']):
+                    ext = '.mp4'
+                elif url_lower.endswith('.png'):
+                    ext = '.png'
+                elif url_lower.endswith('.gif'):
+                    ext = '.gif'
+                elif url_lower.endswith('.webp'):
+                    ext = '.webp'
+                else:
+                    ext = '.jpg'  # 默认jpg
+
+            filepath = os.path.join(directory, f"{filename_base}{ext}")
+
             with open(filepath, 'wb') as f:
                 for chunk in resp.iter_content(chunk_size=4096):
                     f.write(chunk)

@@ -25,8 +25,16 @@
         <slot></slot>
       </div>
 
-      <!-- 调整大小的手柄 -->
-      <div class="weilin_prompt_ui_resize-handle" :title="t('common.windowSize')" @mousedown.stop="startResize"></div>
+      <!-- 调整大小的手柄：四边 -->
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-n" @mousedown.stop="startResize($event, 'n')" title="向上调整"></div>
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-s" @mousedown.stop="startResize($event, 's')" title="向下调整"></div>
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-w" @mousedown.stop="startResize($event, 'w')" title="向左调整"></div>
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-e" @mousedown.stop="startResize($event, 'e')" title="向右调整"></div>
+      <!-- 调整大小的手柄：四角 -->
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-nw" @mousedown.stop="startResize($event, 'nw')" title="向左上调整"></div>
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-ne" @mousedown.stop="startResize($event, 'ne')" title="向右上调整"></div>
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-sw" @mousedown.stop="startResize($event, 'sw')" title="向左下调整"></div>
+      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-se" @mousedown.stop="startResize($event, 'se')" title="向右下调整"></div>
     </div>
   </Teleport>
 </template>
@@ -97,24 +105,26 @@ const MIN_LEFT_SPACE = 100
 const MIN_TOP_SPACE = 55
 const MIN_BOTTOM_SPACE = 100
 const MIN_RIGHT_SPACE = 100
+const MIN_WIDTH = 200
+const MIN_HEIGHT = 200
 
 // 初始化
 onMounted(() => {
   if (props.position) {
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
-    
+
     let x = props.position.x
     let y = props.position.y
-    
+
     x = Math.max(MIN_LEFT_SPACE - (props.size?.width || currentSize.value.width), x)
     x = Math.min(x, viewportWidth - MIN_RIGHT_SPACE)
     y = Math.max(MIN_TOP_SPACE, y)
     y = Math.min(y, viewportHeight - MIN_BOTTOM_SPACE)
-    
+
     currentPosition.value = { x, y }
   }
-  
+
   if (props.size) {
     currentSize.value = { ...props.size }
   }
@@ -157,15 +167,15 @@ const handleDrag = (event) => {
 
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
-  
+
   let newX = event.clientX - dragOffset.value.x
   let newY = event.clientY - dragOffset.value.y
-  
+
   newX = Math.max(MIN_LEFT_SPACE - currentSize.value.width, newX)
   newX = Math.min(newX, viewportWidth - MIN_RIGHT_SPACE)
   newY = Math.max(MIN_TOP_SPACE, newY)
   newY = Math.min(newY, viewportHeight - MIN_BOTTOM_SPACE)
-  
+
   const newPosition = { x: newX, y: newY }
   currentPosition.value = newPosition
   emit('update:position', newPosition)
@@ -177,15 +187,19 @@ const stopDrag = () => {
   document.removeEventListener('mouseup', stopDrag)
 }
 
-// 调整大小
+// 调整大小 - 支持8个方向
 const isResizing = ref(false)
+const resizeDirection = ref('')
 const resizeStartPos = ref({ x: 0, y: 0 })
 const resizeStartSize = ref({ width: 0, height: 0 })
+const resizeStartPosition = ref({ x: 0, y: 0 })
 
-const startResize = (event) => {
+const startResize = (event, direction) => {
   isResizing.value = true
+  resizeDirection.value = direction
   resizeStartPos.value = { x: event.clientX, y: event.clientY }
   resizeStartSize.value = { ...currentSize.value }
+  resizeStartPosition.value = { ...currentPosition.value }
   document.addEventListener('mousemove', handleResize)
   document.addEventListener('mouseup', stopResize)
 }
@@ -195,16 +209,53 @@ const handleResize = (event) => {
 
   const deltaX = event.clientX - resizeStartPos.value.x
   const deltaY = event.clientY - resizeStartPos.value.y
-  const newSize = {
-    width: Math.max(200, resizeStartSize.value.width + deltaX),
-    height: Math.max(200, resizeStartSize.value.height + deltaY)
+  const direction = resizeDirection.value
+
+  let newWidth = resizeStartSize.value.width
+  let newHeight = resizeStartSize.value.height
+  let newX = resizeStartPosition.value.x
+  let newY = resizeStartPosition.value.y
+
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+
+  // 水平方向调整
+  if (direction.includes('e')) {
+    newWidth = Math.max(MIN_WIDTH, resizeStartSize.value.width + deltaX)
+    newWidth = Math.min(newWidth, viewportWidth - currentPosition.value.x - MIN_RIGHT_SPACE)
   }
-  currentSize.value = newSize
-  emit('update:size', newSize)
+  if (direction.includes('w')) {
+    const maxDeltaX = resizeStartSize.value.width - MIN_WIDTH
+    const constrainedDeltaX = Math.min(deltaX, maxDeltaX)
+    newWidth = resizeStartSize.value.width - constrainedDeltaX
+    newX = resizeStartPosition.value.x + constrainedDeltaX
+    // 确保不超出左边界
+    newX = Math.max(MIN_LEFT_SPACE - newWidth, newX)
+  }
+
+  // 垂直方向调整
+  if (direction.includes('s')) {
+    newHeight = Math.max(MIN_HEIGHT, resizeStartSize.value.height + deltaY)
+    newHeight = Math.min(newHeight, viewportHeight - currentPosition.value.y - MIN_BOTTOM_SPACE)
+  }
+  if (direction.includes('n')) {
+    const maxDeltaY = resizeStartSize.value.height - MIN_HEIGHT
+    const constrainedDeltaY = Math.min(deltaY, maxDeltaY)
+    newHeight = resizeStartSize.value.height - constrainedDeltaY
+    newY = resizeStartPosition.value.y + constrainedDeltaY
+    // 确保不超出上边界
+    newY = Math.max(MIN_TOP_SPACE, newY)
+  }
+
+  currentSize.value = { width: newWidth, height: newHeight }
+  currentPosition.value = { x: newX, y: newY }
+  emit('update:size', { width: newWidth, height: newHeight })
+  emit('update:position', { x: newX, y: newY })
 }
 
 const stopResize = () => {
   isResizing.value = false
+  resizeDirection.value = ''
   document.removeEventListener('mousemove', handleResize)
   document.removeEventListener('mouseup', stopResize)
 }
@@ -279,25 +330,118 @@ const handleHeaderMouseDown = (event) => {
   background: var(--weilin-prompt-ui-primary-bg);
 }
 
+/* 调整大小手柄基础样式 */
 .weilin_prompt_ui_resize-handle {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  height: 16px;
-  cursor: se-resize;
+  z-index: 10;
   user-select: none;
 }
 
-.weilin_prompt_ui_resize-handle::after {
+/* 四边手柄 */
+.weilin_prompt_ui_resize-n {
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.weilin_prompt_ui_resize-s {
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.weilin_prompt_ui_resize-w {
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.weilin_prompt_ui_resize-e {
+  right: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+/* 四角手柄 */
+.weilin_prompt_ui_resize-nw {
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nw-resize;
+}
+
+.weilin_prompt_ui_resize-ne {
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: ne-resize;
+}
+
+.weilin_prompt_ui_resize-sw {
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: sw-resize;
+}
+
+.weilin_prompt_ui_resize-se {
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: se-resize;
+}
+
+/* 手柄悬停效果 */
+.weilin_prompt_ui_resize-handle:hover {
+  background: rgba(37, 117, 252, 0.3);
+}
+
+.weilin_prompt_ui_resize-n:hover,
+.weilin_prompt_ui_resize-s:hover {
+  background: linear-gradient(90deg, transparent, rgba(37, 117, 252, 0.3), transparent);
+}
+
+.weilin_prompt_ui_resize-w:hover,
+.weilin_prompt_ui_resize-e:hover {
+  background: linear-gradient(0deg, transparent, rgba(37, 117, 252, 0.3), transparent);
+}
+
+.weilin_prompt_ui_resize-nw:hover,
+.weilin_prompt_ui_resize-ne:hover,
+.weilin_prompt_ui_resize-sw:hover,
+.weilin_prompt_ui_resize-se:hover {
+  background: rgba(37, 117, 252, 0.4);
+  border-radius: 2px;
+}
+
+/* 右下角特殊标记 */
+.weilin_prompt_ui_resize-se::after {
   content: '';
   position: absolute;
-  right: 7px;
-  bottom: 4px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid #999;
-  border-bottom: 2px solid #999;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid rgba(150, 150, 150, 0.5);
+  border-bottom: 2px solid rgba(150, 150, 150, 0.5);
+  pointer-events: none;
+}
+
+.weilin_prompt_ui_resize-se:hover::after {
+  border-right-color: rgba(37, 117, 252, 0.8);
+  border-bottom-color: rgba(37, 117, 252, 0.8);
 }
 
 .weilin_prompt_ui_window-content::-webkit-scrollbar {

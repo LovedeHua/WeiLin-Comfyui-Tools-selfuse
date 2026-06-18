@@ -504,6 +504,32 @@
         </button>
       </div>
 
+
+      <!-- 自定义确认对话框 -->
+      <div v-if="showConfirmDialog" class="weilin-confirm-dialog-overlay" @click="cancelConfirmDialog">
+        <div class="weilin-confirm-dialog" @click.stop>
+          <div class="weilin-confirm-dialog-header">
+            <svg class="weilin-confirm-dialog-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="#ff4d4f"/>
+              <circle cx="12" cy="12" r="10" fill="none" stroke="#ff4d4f" stroke-width="2"/>
+              <path d="M12 7v6M12 17h.01" stroke="#ff4d4f" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="weilin-confirm-dialog-title">确认删除</span>
+          </div>
+          <div class="weilin-confirm-dialog-content">
+            {{ confirmDialogMessage }}
+          </div>
+          <div class="weilin-confirm-dialog-footer">
+            <button class="weilin-confirm-dialog-btn weilin-confirm-dialog-btn-cancel" @click="cancelConfirmDialog">
+              取消
+            </button>
+            <button class="weilin-confirm-dialog-btn weilin-confirm-dialog-btn-confirm" @click="executeConfirmDialog">
+              确定
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Lora管理器容器 -->
       <div class="tag-manager-section">
 
@@ -730,6 +756,11 @@ const lastInputValue = ref(''); // 用于存储上一次的输入内容
 
 // 在data或ref部分添加一个计数器用于生成唯一ID
 const tokenIdCounter = ref(0);
+
+const showConfirmDialog = ref(false)
+const confirmDialogMessage = ref('')
+let confirmDialogCallback = null
+
 
 // 功能开关状态变量 - 从localStorage读取初始值，默认值都为true
 const isClearAllEnabled = ref(localStorage.getItem('weilin_function_toggles_clearAll') !== 'false');
@@ -2862,12 +2893,26 @@ const enableSelectedTokens = () => {
 // 删除选中的标签（替代原来的showBulkDeleteConfirmation）
 const deleteSelectedTokens = () => {
   if (selectedTokens.value.length > 0) {
-    if (confirm(`确定要删除选中的 ${selectedTokens.value.length} 个标签吗？`)) {
+    confirmDialogMessage.value = `确定要删除选中的 ${selectedTokens.value.length} 个标签吗？`
+    confirmDialogCallback = () => {
       bulkDeleteSelectedTokens()
-    } else {
-      // 如果取消删除，清除选中状态
-      clearSelectedTokens()
     }
+    showConfirmDialog.value = true
+  }
+}
+
+const cancelConfirmDialog = () => {
+  showConfirmDialog.value = false
+  confirmDialogCallback = null
+  // 取消删除时清除选中状态
+  clearSelectedTokens()
+}
+
+const executeConfirmDialog = () => {
+  showConfirmDialog.value = false
+  if (confirmDialogCallback) {
+    confirmDialogCallback()
+    confirmDialogCallback = null
   }
 }
 

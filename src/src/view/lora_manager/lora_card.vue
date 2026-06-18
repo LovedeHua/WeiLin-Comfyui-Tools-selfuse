@@ -250,7 +250,7 @@
 
                 <!-- 图片 -->
                 <ul class="lora-detail__images" v-if="loraInfo.images?.length" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; list-style: none; padding: 0; margin: 0;">
-                    <li v-for="(img, index) in loraInfo.images" :key="index" class="lora-detail__image-item">
+                    <li v-for="(img, index) in loraInfo.images" :key="img.url || index" class="lora-detail__image-item">
                         <div class="image-wrapper" style="height: 200px; cursor: zoom-in; position: relative;" @click="openPreview(img.url, img)">
                             <!-- 本地封面标志 -->
                             <div v-if="isLocalCover(img.url)" class="local-cover-badge" title="本地封面">
@@ -259,8 +259,25 @@
                                 </svg>
                                 <span>本地</span>
                             </div>
-                            <video v-if="img.type === 'video' || isVideoUrl(img.url)" :src="img.url" autoplay muted loop playsinline @mouseenter="handleCardEnter" @click.stop="openPreview(img.url, img)" @error="handleVideoError" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;" />
-                            <img v-else :src="img.url" @mouseenter="handleCardEnter" @click.stop="openPreview(img.url, img)" draggable="false" style="width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;" />
+                            <!-- 视频元素 -->
+                            <video
+                                :src="img.url"
+                                v-show="img.type === 'video' || isVideoUrl(img.url)"
+                                autoplay muted loop playsinline
+                                @mouseenter="handleCardEnter"
+                                @click.stop="openPreview(img.url, img)"
+                                @error="handleVideoError"
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;"
+                            />
+                            <!-- 图片元素 -->
+                            <img
+                                :src="img.url"
+                                v-show="!(img.type === 'video' || isVideoUrl(img.url))"
+                                @mouseenter="handleCardEnter"
+                                @click.stop="openPreview(img.url, img)"
+                                draggable="false"
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;"
+                            />
                         </div>
                     </li>
                 </ul>
@@ -1102,10 +1119,22 @@ const extractFileNameFromUrl = (url) => {
 
 const isVideoUrl = (url) => {
     if (!url) return false
-    return url.startsWith('data:video/') || 
-           url.toLowerCase().endsWith('.mp4') ||
-           url.toLowerCase().includes('.mp4') ||
-           url.toLowerCase().includes('fmt=mp4')
+    try {
+        const urlObj = new URL(url, window.location.origin)
+        const pathname = urlObj.pathname.toLowerCase()
+        const urlLower = url.toLowerCase()
+        return pathname.endsWith('.mp4') || 
+               url.startsWith('data:video/') ||
+               urlObj.searchParams.get('fmt') === 'mp4' ||
+               urlLower.endsWith('.webm') ||
+               urlLower.endsWith('.mov')
+    } catch {
+        const urlLower = url.toLowerCase()
+        return urlLower.endsWith('.mp4') ||
+               url.startsWith('data:video/') ||
+               urlLower.endsWith('.webm') ||
+               urlLower.endsWith('.mov')
+    }
 }
 
 const handleVideoError = (e) => {

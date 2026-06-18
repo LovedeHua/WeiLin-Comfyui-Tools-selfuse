@@ -3,55 +3,99 @@
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-top">
-        <button class="refresh-btn" @click="refreshTags">
-          <svg viewBox="0 0 24 24" width="16" height="16" class="refresh-icon">
-            <path
-              d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
-          </svg>
-        </button>
+        <div class="toolbar-left">
+          <button class="refresh-btn" @click="refreshTags" title="刷新">
+            <svg viewBox="0 0 24 24" width="16" height="16" class="refresh-icon">
+              <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+            </svg>
+          </button>
 
-        <div class="search-container">
-          <input type="text" v-model="searchQuery" :placeholder="t('tagManager.searchPlaceholder')" class="search-input"
-            ref="searchInput" @input="isSearching = searchQuery.trim().length > 0" />
-          <!-- 搜索结果 -->
-          <div v-if="isSearching" class="search-results" :style="searchResultsStyle">
-            <div v-if="searchResults.length === 0" class="no-results">
-              {{ t('tagManager.noResults') }}
-            </div>
-            <div v-else v-for="(result, index) in searchResults" :key="`${index}-search_item`"
-              class="search-result-item" @click="navigateToResult(result)">
-              <div class="result-content">
-                <span class="result-text">
-                  {{ result.name || result.text }}
-                </span>
-                <span class="result-path">
-                  {{ result.where }}
-                </span>
+          <button 
+            class="search-toggle-btn" 
+            :class="{ active: isSearchExpanded }"
+            @click="toggleSearch"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" class="search-icon">
+              <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+            <span>{{ isSearchExpanded ? '收起搜索' : '搜索Tag' }}</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" class="arrow-icon" :class="{ rotated: isSearchExpanded }">
+              <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+            </svg>
+          </button>
+
+          <button class="import-btn" @click="showImportDialog">
+            {{ t('tagManager.importTags') }}
+          </button>
+        </div>
+
+        <div class="toolbar-right">
+          <button class="add-btn" @click="showAddTagDialog" :disabled="!selectedGroup">
+            <span class="plus-icon">+</span>
+            {{ t('tagManager.addTag') }}
+          </button>
+
+          <button v-if="isShareTagAction" class="share-selected-btn" @click="shareSelectedTags"
+            :disabled="!selectedTags.length">
+            {{ t('tagManager.shareSelected') }}
+          </button>
+          <button v-else class="share-btn" @click="shareTagAction" :disabled="!selectedGroup">
+            {{ t('tagManager.batchShare') }}
+          </button>
+          <button v-if="isShareTagAction" class="cancel-delete-btn" @click="cancelShareAction">
+            {{ t('tagManager.cancelShare') }}
+          </button>
+
+          <button v-if="isDeleteTagAction" class="delete-btn" @click="deleteSelectedTags"
+            :disabled="!selectedTags.length">
+            {{ t('tagManager.deleteSelected') }}
+          </button>
+          <button v-else class="delete-action-btn" @click="deleteTagAction" :disabled="!selectedGroup">
+            {{ t('tagManager.hasDeleteAction') }}
+          </button>
+          <button v-if="isDeleteTagAction" class="cancel-delete-btn" @click="cancelDeleteAction">
+            {{ t('tagManager.cancelDelete') }}
+          </button>
+        </div>
+      </div>
+
+      <transition name="search-collapse" @enter="onSearchEnter" @leave="onSearchLeave">
+        <div v-show="isSearchExpanded" class="search-panel" ref="searchPanelRef">
+          <div class="toolbar-top" style="margin-top: 10px;">
+            <div class="search-container">
+              <input type="text" v-model="searchQuery" :placeholder="t('tagManager.searchPlaceholder')" class="search-input"
+                ref="searchInput" @input="isSearching = searchQuery.trim().length > 0" />
+              <div v-if="isSearching" class="search-results" :style="searchResultsStyle">
+                <div v-if="searchResults.length === 0" class="no-results">
+                  {{ t('tagManager.noResults') }}
+                </div>
+                <div v-else v-for="(result, index) in searchResults" :key="`${index}-search_item`"
+                  class="search-result-item" @click="navigateToResult(result)">
+                  <div class="result-content">
+                    <span class="result-text">
+                      {{ result.name || result.text }}
+                    </span>
+                    <span class="result-path">
+                      {{ result.where }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+          <div class="toolbar-bottom" style="margin-top: 8px;">
+            <div class="group-edit-mode">
+              <label>
+                <input type="checkbox" v-model="isAutoAddSearchTag" :true-value="1" :false-value="0" />
+                {{ t('tagManager.autoAddSearchTag') }}
+              </label>
+            </div>
+            <button class="tab-size-btn" @click="showTabSizeDialog">
+              {{ t('tagManager.modifyTabSize') }}
+            </button>
+          </div>
         </div>
-
-        <button class="import-btn" @click="showImportDialog">
-          {{ t('tagManager.importTags') }}
-        </button>
-
-      </div>
-
-      <!-- 高级设置 -->
-      <div class="toolbar-bottom">
-        <div class="group-edit-mode">
-          <label>
-            <input type="checkbox" v-model="isAutoAddSearchTag" :true-value="1" :false-value="0" />
-            {{ t('tagManager.autoAddSearchTag') }}
-          </label>
-        </div>
-        <!-- 新增修改标签尺寸按钮 -->
-        <button class="tab-size-btn" @click="showTabSizeDialog">
-          {{ t('tagManager.modifyTabSize') }}
-        </button>
-      </div>
-
+      </transition>
     </div>
 
     <!-- 分类导航区域 -->
@@ -165,39 +209,7 @@
 
     <!-- Tag列表 标签内容区域 -->
     <div class="tags-content">
-      <div class="tags-header">
-        <div class="tags-title">{{ selectedGroup ? selectedGroup.name : t('tagManager.selectCategory') }}</div>
-        <div class="tags-actions">
-          <button class="add-btn" @click="showAddTagDialog" :disabled="!selectedGroup">
-            <span class="plus-icon">+</span>
-            {{ t('tagManager.addTag') }}
-          </button>
-
-          <!-- 批量分享按钮 -->
-          <button v-if="isShareTagAction" class="share-selected-btn" @click="shareSelectedTags"
-            :disabled="!selectedTags.length">
-            {{ t('tagManager.shareSelected') }}
-          </button>
-          <button v-else class="share-btn" @click="shareTagAction" :disabled="!selectedGroup">
-            {{ t('tagManager.batchShare') }}
-          </button>
-          <button v-if="isShareTagAction" class="cancel-delete-btn" @click="cancelShareAction">
-            {{ t('tagManager.cancelShare') }}
-          </button>
-
-          <!-- 批量删除功能 -->
-          <button v-if="isDeleteTagAction" class="delete-btn" @click="deleteSelectedTags"
-            :disabled="!selectedTags.length">
-            {{ t('tagManager.deleteSelected') }}
-          </button>
-          <button v-else class="delete-action-btn" @click="deleteTagAction" :disabled="!selectedGroup">
-            {{ t('tagManager.hasDeleteAction') }}
-          </button>
-          <button v-if="isDeleteTagAction" class="cancel-delete-btn" @click="cancelDeleteAction">
-            {{ t('tagManager.cancelDelete') }}
-          </button>
-        </div>
-      </div>
+      
 
       <div class="tags-grid" v-if="selectedGroup">
         <div v-for="tag in currentTags" :key="'tag-grid-' + tag.id_index"
@@ -523,6 +535,39 @@ const editGroupCategroy = ref(0); // 添加编辑模式状态
 
 const highlightedTagId = ref(null); // 添加高亮状态
 const isAutoAddSearchTag = ref(0); // 添加高亮状态
+
+// ========== 搜索区域折叠 ==========
+const isSearchExpanded = ref(false)
+const searchPanelRef = ref(null)
+
+const toggleSearch = () => {
+  isSearchExpanded.value = !isSearchExpanded.value
+  if (isSearchExpanded.value) {
+    nextTick(() => {
+      updateSearchResultsStyle()
+      searchInput.value?.focus()
+    })
+  } else {
+    isSearching.value = false
+    searchQuery.value = ''
+    searchResults.value = []
+  }
+}
+
+const onSearchEnter = (el) => {
+  el.style.height = '0px'
+  el.style.overflow = 'hidden'
+  el.offsetHeight // force reflow
+  el.style.height = el.scrollHeight + 'px'
+}
+
+const onSearchLeave = (el) => {
+  el.style.height = el.scrollHeight + 'px'
+  el.style.overflow = 'hidden'
+  el.offsetHeight // force reflow
+  el.style.height = '0px'
+}
+
 
 // 新增状态变量
 const showMoveDialog = ref(false);
@@ -2583,4 +2628,86 @@ const resetTabSizeConfig = () => {
 .reset-btn:hover {
   opacity: 0.9;
 }
+
+/* ===== 搜索折叠功能 ===== */
+.search-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--weilin-prompt-ui-border-color);
+  border-radius: 4px;
+  background: var(--weilin-prompt-ui-secondary-bg);
+  color: var(--weilin-prompt-ui-primary-text);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-size: 13px;
+  white-space: nowrap;
+  height: 32px;
+}
+
+.search-toggle-btn:hover {
+  border-color: var(--weilin-prompt-ui-primary-color);
+  background: var(--weilin-prompt-ui-hover-bg);
+}
+
+.search-toggle-btn.active {
+  border-color: var(--weilin-prompt-ui-primary-color);
+  background: rgba(var(--weilin-prompt-ui-primary-color-rgb), 0.15);
+  color: var(--weilin-prompt-ui-primary-color);
+}
+
+.search-icon {
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.arrow-icon {
+  fill: currentColor;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.arrow-icon.rotated {
+  transform: rotate(180deg);
+}
+
+.search-panel {
+  overflow: hidden;
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 折叠动画 */
+.search-collapse-enter-active,
+.search-collapse-leave-active {
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+}
+
+.search-collapse-enter-from,
+.search-collapse-leave-to {
+  opacity: 0;
+}
+
+/* 工具栏分隔线 */
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--weilin-prompt-ui-border-color);
+  margin: 0 4px;
+}
+/* 工具栏左右分组 */
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+
 </style>
