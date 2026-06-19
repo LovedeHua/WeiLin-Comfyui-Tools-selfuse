@@ -26,10 +26,6 @@
       </div>
 
       <!-- 调整大小的手柄：四边 -->
-      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-n" @mousedown.stop="startResize($event, 'n')" title="向上调整"></div>
-      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-s" @mousedown.stop="startResize($event, 's')" title="向下调整"></div>
-      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-w" @mousedown.stop="startResize($event, 'w')" title="向左调整"></div>
-      <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-e" @mousedown.stop="startResize($event, 'e')" title="向右调整"></div>
       <!-- 调整大小的手柄：四角 -->
       <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-nw" @mousedown.stop="startResize($event, 'nw')" title="向左上调整"></div>
       <div class="weilin_prompt_ui_resize-handle weilin_prompt_ui_resize-ne" @mousedown.stop="startResize($event, 'ne')" title="向右上调整"></div>
@@ -101,10 +97,10 @@ const handleScroll = () => {
 }
 
 // 边界常量
-const MIN_LEFT_SPACE = 100
+const MIN_LEFT_SPACE = 20
 const MIN_TOP_SPACE = 55
-const MIN_BOTTOM_SPACE = 100
-const MIN_RIGHT_SPACE = 100
+const MIN_BOTTOM_SPACE = 20
+const MIN_RIGHT_SPACE = 20
 const MIN_WIDTH = 200
 const MIN_HEIGHT = 200
 
@@ -229,7 +225,6 @@ const handleResize = (event) => {
     const constrainedDeltaX = Math.min(deltaX, maxDeltaX)
     newWidth = resizeStartSize.value.width - constrainedDeltaX
     newX = resizeStartPosition.value.x + constrainedDeltaX
-    // 确保不超出左边界
     newX = Math.max(MIN_LEFT_SPACE - newWidth, newX)
   }
 
@@ -243,7 +238,6 @@ const handleResize = (event) => {
     const constrainedDeltaY = Math.min(deltaY, maxDeltaY)
     newHeight = resizeStartSize.value.height - constrainedDeltaY
     newY = resizeStartPosition.value.y + constrainedDeltaY
-    // 确保不超出上边界
     newY = Math.max(MIN_TOP_SPACE, newY)
   }
 
@@ -282,7 +276,7 @@ const handleHeaderMouseDown = (event) => {
   border: 1px solid var(--weilin-prompt-ui-border-color);
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   outline: none;
@@ -296,6 +290,7 @@ const handleHeaderMouseDown = (event) => {
   background: var(--weilin-prompt-ui-secondary-bg);
   cursor: move;
   user-select: none;
+  border-radius: 8px 8px 0 0;
 }
 
 .weilin_prompt_ui_window-title {
@@ -305,7 +300,7 @@ const handleHeaderMouseDown = (event) => {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
-  margin-right: 8px;
+  margin-right: 5px;
   color: var(--weilin-prompt-ui-primary-text);
 }
 
@@ -328,120 +323,129 @@ const handleHeaderMouseDown = (event) => {
   overflow-x: hidden;
   padding: 16px;
   background: var(--weilin-prompt-ui-primary-bg);
+  border-radius: 0 0 8px 8px;
 }
 
-/* 调整大小手柄基础样式 */
+/* ============================================
+   调整大小手柄 - 基础样式（仅四角）
+   ============================================ */
 .weilin_prompt_ui_resize-handle {
   position: absolute;
   z-index: 10;
   user-select: none;
 }
 
-/* 四边手柄 */
-.weilin_prompt_ui_resize-n {
-  top: 0;
-  left: 8px;
-  right: 8px;
-  height: 6px;
-  cursor: ns-resize;
-}
-
-.weilin_prompt_ui_resize-s {
-  bottom: 0;
-  left: 8px;
-  right: 8px;
-  height: 6px;
-  cursor: ns-resize;
-}
-
-.weilin_prompt_ui_resize-w {
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 6px;
-  cursor: ew-resize;
-}
-
-.weilin_prompt_ui_resize-e {
-  right: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 6px;
-  cursor: ew-resize;
-}
-
-/* 四角手柄 */
-.weilin_prompt_ui_resize-nw {
-  top: 0;
-  left: 0;
+/* ============================================
+   四边手柄 - 更大的热区，延伸到边框外面
+   ============================================ */
+/* ============================================
+   四角手柄 - 更大的热区，延伸到边框外面
+   ============================================ */
+.weilin_prompt_ui_resize-nw,
+.weilin_prompt_ui_resize-ne,
+.weilin_prompt_ui_resize-sw,
+.weilin_prompt_ui_resize-se {
   width: 12px;
   height: 12px;
+  z-index: 11;
+}
+
+.weilin_prompt_ui_resize-nw {
+  top: -4px;
+  left: -4px;
   cursor: nw-resize;
 }
 
 .weilin_prompt_ui_resize-ne {
-  top: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
+  top: -4px;
+  right: -4px;
   cursor: ne-resize;
 }
 
 .weilin_prompt_ui_resize-sw {
-  bottom: 0;
-  left: 0;
-  width: 12px;
-  height: 12px;
+  bottom: -4px;
+  left: -4px;
   cursor: sw-resize;
 }
 
 .weilin_prompt_ui_resize-se {
-  bottom: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
+  bottom: -4px;
+  right: -4px;
   cursor: se-resize;
 }
 
-/* 手柄悬停效果 */
-.weilin_prompt_ui_resize-handle:hover {
-  background: rgba(37, 117, 252, 0.3);
+/* ============================================
+   四角角框 - 显示在边框外面
+   ============================================ */
+.weilin_prompt_ui_resize-nw::before,
+.weilin_prompt_ui_resize-ne::before,
+.weilin_prompt_ui_resize-sw::before,
+.weilin_prompt_ui_resize-se::before {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  transition: all 0.15s ease;
+  border-radius: 1px;
 }
 
-.weilin_prompt_ui_resize-n:hover,
-.weilin_prompt_ui_resize-s:hover {
-  background: linear-gradient(90deg, transparent, rgba(37, 117, 252, 0.3), transparent);
+/* 左上 - 角框在左上角外面 */
+.weilin_prompt_ui_resize-nw::before {
+  top: 5px;
+  left: 5px;
+  border-top: 3px solid rgba(140, 140, 140, 0.7);
+  border-left: 3px solid rgba(140, 140, 140, 0.7);
 }
 
-.weilin_prompt_ui_resize-w:hover,
-.weilin_prompt_ui_resize-e:hover {
-  background: linear-gradient(0deg, transparent, rgba(37, 117, 252, 0.3), transparent);
+/* 右上 - 角框在右上角外面 */
+.weilin_prompt_ui_resize-ne::before {
+  top: 5px;
+  right: 5px;
+  border-top: 3px solid rgba(140, 140, 140, 0.7);
+  border-right: 3px solid rgba(140, 140, 140, 0.7);
 }
 
+/* 左下 - 角框在左下角外面 */
+.weilin_prompt_ui_resize-sw::before {
+  bottom: 5px;
+  left: 5px;
+  border-bottom: 3px solid rgba(140, 140, 140, 0.7);
+  border-left: 3px solid rgba(140, 140, 140, 0.7);
+}
+
+/* 右下 - 角框在右下角外面 */
+.weilin_prompt_ui_resize-se::before {
+  bottom: 5px;
+  right: 5px;
+  border-bottom: 3px solid rgba(140, 140, 140, 0.7);
+  border-right: 3px solid rgba(140, 140, 140, 0.7);
+}
+
+/* ============================================
+   四角角框 - 悬停高亮
+   ============================================ */
+.weilin_prompt_ui_resize-nw:hover::before,
+.weilin_prompt_ui_resize-ne:hover::before,
+.weilin_prompt_ui_resize-sw:hover::before,
+.weilin_prompt_ui_resize-se:hover::before {
+  border-color: rgba(37, 117, 252, 0.9);
+  width: 12px;
+  height: 12px;
+}
+
+/* ============================================
+   四边手柄 - 悬停高亮
+   ============================================ */
+/* ============================================
+   四角手柄 - 悬停背景
+   ============================================ */
 .weilin_prompt_ui_resize-nw:hover,
 .weilin_prompt_ui_resize-ne:hover,
 .weilin_prompt_ui_resize-sw:hover,
 .weilin_prompt_ui_resize-se:hover {
-  background: rgba(37, 117, 252, 0.4);
-  border-radius: 2px;
-}
-
-/* 右下角特殊标记 */
-.weilin_prompt_ui_resize-se::after {
-  content: '';
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 6px;
-  height: 6px;
-  border-right: 2px solid rgba(150, 150, 150, 0.5);
-  border-bottom: 2px solid rgba(150, 150, 150, 0.5);
-  pointer-events: none;
-}
-
-.weilin_prompt_ui_resize-se:hover::after {
-  border-right-color: rgba(37, 117, 252, 0.8);
-  border-bottom-color: rgba(37, 117, 252, 0.8);
+  background: rgba(37, 117, 252, 0.1);
+  border-radius: 4px;
 }
 
 .weilin_prompt_ui_window-content::-webkit-scrollbar {
