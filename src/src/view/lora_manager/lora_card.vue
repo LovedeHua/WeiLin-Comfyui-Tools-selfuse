@@ -944,6 +944,26 @@ const closePreview = () => {
     previewTranslateY.value = 0
 }
 
+// ESC 键关闭预览（使用捕获阶段，阻止外层窗口响应 ESC）
+const handlePreviewKeyDown = (e) => {
+    if (e.key === 'Escape' && previewVisible.value) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (typeof e.stopImmediatePropagation === 'function') {
+            e.stopImmediatePropagation()
+        }
+        closePreview()
+    }
+}
+
+watch(previewVisible, (val) => {
+    if (val) {
+        window.addEventListener('keydown', handlePreviewKeyDown, true)
+    } else {
+        window.removeEventListener('keydown', handlePreviewKeyDown, true)
+    }
+})
+
 // 缩放功能
 const handleWheel = (e) => {
     e.preventDefault()
@@ -1483,7 +1503,7 @@ input:focus {
     right: 24px;
     width: 24px;
     height: 24px;
-    border-radius: 50%;
+    border-radius: 4px;
     background-color: rgba(187, 187, 187, 0.5);
     display: flex;
     align-items: center;

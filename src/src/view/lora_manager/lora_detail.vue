@@ -29,6 +29,9 @@
                                 </svg>
                                 <span>本地封面</span>
                             </div>
+                            <button class="fetch-btn lora-raw-btn" @click="openLoraRaw(loraInfo.raw.metadata)" title="查看LoraRaw">
+                                {{ t('lora.seeLoraRaw') }}
+                            </button>
                         </div>
 
                     <!-- 标签区域 -->
@@ -49,12 +52,7 @@
                             <!-- 文件信息 -->
                             <tr>
                                 <td class="label">{{ t('lora.file') }}</td>
-                                <td colspan="2">{{ loraInfo.file }}</td>
-                                <td colspan="3">
-                                    <button class="fetch-btn" @click="openLoraRaw(loraInfo.raw.metadata)">
-                                        {{ t('lora.seeLoraRaw') }}
-                                    </button>
-                                </td>
+                                <td colspan="5">{{ loraInfo.file }}</td>
                             </tr>
 
                             <!-- Hash值 -->
@@ -223,39 +221,43 @@
 
 
                             <!-- 训练词 -->
-                            <tr v-if="trainedWords.length">
-                                <td class="label">
-                                    {{ t('lora.trainedWords') }}
-                                    <svg viewBox="0 0 24 24" width="16" height="16" class="help-icon"
-                                        :title="t('lora.trainedWordsTip')">
-                                        <path
-                                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                    </svg>
-                                    <div v-if="selectedWords.length" class="word-selection">
-                                        {{ t('lora.selectedWords', { count: selectedWords.length }) }}
-                                        <button class="copy-btn" @click="copySelectedWords">
-                                            {{ t('common.copy') }}
-                                        </button>
+                            <tr v-if="trainedWords.length" class="trained-words-row">
+                                <td colspan="3">
+                                    <div class="trained-words-section">
+                                        <div class="trained-words-header">
+                                            <div class="trained-words-label">
+                                                <span>{{ t('lora.trainedWords') }}</span>
+                                                <svg viewBox="0 0 24 24" width="14" height="14" class="help-icon"
+                                                    :title="t('lora.trainedWordsTip')">
+                                                    <path
+                                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
+                                                </svg>
+                                            </div>
+                                            <div v-if="selectedWords.length" class="word-selection-bar">
+                                                <span>{{ t('lora.selectedWords', { count: selectedWords.length }) }}</span>
+                                                <button class="copy-btn" @click="copySelectedWords">
+                                                    {{ t('common.copy') }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="word-cloud">
+                                            <span v-for="(word, index) in isCollapsed ? trainedWords.slice(0, 10) : trainedWords"
+                                                :key="'words-' + index" class="word-tag"
+                                                :class="{ 'is-selected': isWordSelected(word.word), 'is-hidden': isCollapsed && index >= 10 }"
+                                                @click="toggleWordSelection(word.word)">
+                                                <span class="word-text">{{ word.word }}</span>
+                                                <svg v-if="word.civitai" viewBox="0 0 24 24" width="12" height="12" class="civitai-icon">
+                                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H8l4-7v4h3l-4 7z" />
+                                                </svg>
+                                                <small v-if="word.count != null" class="word-count">{{ word.count }}</small>
+                                            </span>
+                                        </div>
+                                        <div v-if="trainedWords.length > 10" class="toggle-bar">
+                                            <span class="toggle-pill" @click="toggleCollapse">
+                                                {{ isCollapsed ? t('common.showMore') : t('common.showLess') }}
+                                            </span>
+                                        </div>
                                     </div>
-                                </td>
-                                <td colspan="2">
-                                    <ul class="word-list">
-                                        <li v-for="(word, index) in isCollapsed ? trainedWords.slice(0, 10) : trainedWords"
-                                            :key="'words-' + index" class="word-item"
-                                            :class="{ 'is-selected': isWordSelected(word.word), 'is-hidden': isCollapsed && index >= 10 }"
-                                            @click="toggleWordSelection(word.word)">
-                                            <span>{{ word.word }}</span>
-                                            <svg v-if="word.civitai" viewBox="0 0 24 24" width="16" height="16"
-                                                class="civitai-icon">
-                                                <path
-                                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H8l4-7v4h3l-4 7z" />
-                                            </svg>
-                                            <small v-if="word.count != null">{{ word.count }}</small>
-                                        </li>
-                                        <li v-if="trainedWords.length > 10" class="toggle-btn" @click="toggleCollapse">
-                                            {{ isCollapsed ? t('common.showMore') : t('common.showLess') }}
-                                        </li>
-                                    </ul>
                                 </td>
                             </tr>
 
@@ -266,8 +268,8 @@
                     <ul class="lora-detail__images" v-if="loraInfo.images?.length">
                         <li v-for="(img, index) in loraInfo.images" :key="img.url || index" class="lora-detail__image-item">
                             <figure>
-                                <div class="image-wrapper">
-                                    <div class="image-action" @click="saveLoraImg(img.url)">
+                                <div class="image-wrapper" @click="openPreview(img.url, img)" style="cursor: zoom-in;">
+                                    <div class="image-action" @click.stop="saveLoraImg(img.url)">
                                         设置为Lora封面
                                     </div>
                                     <!-- 视频元素 -->
@@ -275,14 +277,16 @@
                                         :src="img.url"
                                         v-show="img.type === 'video' || isVideoUrl(img.url)"
                                         autoplay muted loop playsinline
-                                        @mouseenter="handleCardEnter"
-                                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;"
+                                        @click.stop="openPreview(img.url, img)"
+                                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;"
                                     />
                                     <!-- 图片元素 -->
                                     <img
                                         :src="img.url"
                                         v-show="!(img.type === 'video' || isVideoUrl(img.url))"
-                                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;"
+                                        draggable="false"
+                                        @click.stop="openPreview(img.url, img)"
+                                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in;"
                                     />
                                 </div>
 
@@ -341,6 +345,39 @@
     </DraggableWindow>
 
     <loraRaw ref="loraRawRef" />
+
+    <!-- 放大预览弹窗 - Teleport 到 body，脱离父级层叠上下文 -->
+    <Teleport to="body">
+        <div v-if="previewVisible" class="preview-overlay" @wheel="handleWheel" @mousemove="handleUnifiedMouseMove" @mouseup="handleUnifiedMouseUp" @mousedown="handlePreviewMouseDown">
+            <div class="preview-container" @click.stop>
+                <button class="preview-close-btn" @click.stop="closePreview" title="关闭">×</button>
+                <button class="preview-set-cover-btn" @click.stop="setAsCover" title="设为Lora封面">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                    </svg>
+                    <span>设为封面</span>
+                </button>
+                <div class="preview-click-area" @click="closePreview"></div>
+                <div class="preview-hint">
+                    <div>滚轮缩放 | 拖拽移动</div>
+                    <div>双击重置 | 中键关闭</div>
+                    <div>视频拖拽边框移动</div>
+                </div>
+                <div class="preview-content-wrapper" :class="{ 'is-dragging': isDraggingPreview }" :style="wrapperStyle">
+                    <div class="preview-content" @mousedown="handlePreviewMouseDown" @dblclick="handlePreviewDoubleClick">
+                        <div v-if="previewIsVideo" class="video-drag-frame" :style="videoFrameStyle">
+                            <div class="video-drag-border top" @mousedown="handleVideoDragStart"></div>
+                            <div class="video-drag-border right" @mousedown="handleVideoDragStart"></div>
+                            <div class="video-drag-border bottom" @mousedown="handleVideoDragStart"></div>
+                            <div class="video-drag-border left" @mousedown="handleVideoDragStart"></div>
+                            <video :src="previewUrl" autoplay muted loop playsinline controls :style="videoPreviewStyle" />
+                        </div>
+                        <img v-else :src="previewUrl" draggable="false" :style="imgStyle" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 
 </template>
 
@@ -1008,6 +1045,251 @@ const toggleCollapse = () => {
     isCollapsed.value = !isCollapsed.value;
 }
 
+// ========== 图片/视频放大预览 ==========
+const previewVisible = ref(false)
+const previewUrl = ref('')
+const previewIsVideo = ref(false)
+
+// 缩放和拖拽状态
+const previewScale = ref(1)
+const previewTranslateX = ref(0)
+const previewTranslateY = ref(0)
+const previewImgWidth = ref(0)
+const previewImgHeight = ref(0)
+const isDraggingPreview = ref(false)
+const isScaling = ref(false)
+let scaleTimeout = null
+const dragStartX = ref(0)
+const dragStartY = ref(0)
+const dragStartTranslateX = ref(0)
+const dragStartTranslateY = ref(0)
+
+// 计算属性：图片样式（transform 缩放）
+const imgStyle = computed(() => ({
+    transform: `scale(${previewScale.value})`,
+    transformOrigin: 'center center',
+    transition: isScaling.value && !isDraggingPreview.value ? 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+}))
+
+// 视频预览样式
+const videoPreviewStyle = computed(() => ({
+    maxWidth: '90vw',
+    maxHeight: '85vh',
+    objectFit: 'contain',
+    transition: isScaling.value ? 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+}))
+
+// 视频边框容器样式：只包含缩放
+const videoFrameStyle = computed(() => ({
+    transform: `scale(${previewScale.value})`,
+    transformOrigin: 'center center',
+    transition: isScaling.value && !isDraggingPreview.value ? 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+}))
+
+// 计算属性：wrapper 样式（transform 平移）
+const wrapperStyle = computed(() => ({
+    transform: `translate(${previewTranslateX.value}px, ${previewTranslateY.value}px)`,
+    transition: isDraggingPreview.value ? 'none' : 'transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+}))
+
+// 打开预览
+const openPreview = (url, imgData) => {
+    previewUrl.value = url
+    previewIsVideo.value = (imgData && imgData.type === 'video') || isVideoUrl(url)
+    previewVisible.value = true
+    // 重置缩放和位置
+    previewScale.value = 1
+    previewTranslateX.value = 0
+    previewTranslateY.value = 0
+    // 初始化图片尺寸
+    previewImgWidth.value = window.innerWidth * 0.8
+    previewImgHeight.value = window.innerHeight * 0.8
+    // 如果是图片，加载后获取实际尺寸
+    if (!previewIsVideo.value) {
+        const img = new Image()
+        img.onload = () => {
+            const maxWidth = window.innerWidth * 0.8
+            const maxHeight = window.innerHeight * 0.8
+            const scale = Math.min(maxWidth / img.naturalWidth, maxHeight / img.naturalHeight, 1)
+            previewImgWidth.value = img.naturalWidth * scale
+            previewImgHeight.value = img.naturalHeight * scale
+        }
+        img.src = url
+    }
+}
+
+// 关闭预览
+const closePreview = () => {
+    previewVisible.value = false
+    previewUrl.value = ''
+    previewIsVideo.value = false
+    previewScale.value = 1
+    previewTranslateX.value = 0
+    previewTranslateY.value = 0
+}
+
+// ESC 键关闭预览
+const handleKeyDown = (e) => {
+    if (e.key === 'Escape' && previewVisible.value) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (typeof e.stopImmediatePropagation === 'function') {
+            e.stopImmediatePropagation()
+        }
+        closePreview()
+    }
+}
+
+watch(previewVisible, (val) => {
+    if (val) {
+        window.addEventListener('keydown', handleKeyDown, true)
+    } else {
+        window.removeEventListener('keydown', handleKeyDown, true)
+    }
+})
+
+// 滚轮缩放
+const handleWheel = (e) => {
+    e.preventDefault()
+    // 启用缩放过渡动画
+    isScaling.value = true
+    if (scaleTimeout) clearTimeout(scaleTimeout)
+    scaleTimeout = setTimeout(() => {
+        isScaling.value = false
+    }, 100)
+
+    const oldScale = previewScale.value
+    const delta = e.deltaY > 0 ? -0.12 : 0.12
+
+    // 视频模式限制缩放范围 0.5 ~ 3，图片模式 0.15 ~ 6
+    const minScale = previewIsVideo.value ? 0.5 : 0.15
+    const maxScale = previewIsVideo.value ? 3 : 6
+    const newScale = Math.max(minScale, Math.min(maxScale, oldScale + delta))
+
+    if (oldScale !== newScale) {
+        if (!previewIsVideo.value) {
+            // 图片模式：以鼠标位置为中心缩放
+            const rect = e.currentTarget.getBoundingClientRect()
+            const mouseX = e.clientX - rect.left - rect.width / 2
+            const mouseY = e.clientY - rect.top - rect.height / 2
+            const scaleRatio = newScale / oldScale
+            previewTranslateX.value = mouseX - (mouseX - previewTranslateX.value) * scaleRatio
+            previewTranslateY.value = mouseY - (mouseY - previewTranslateY.value) * scaleRatio
+        }
+        // 视频模式：只改变缩放值，不修改平移位置（视频始终居中）
+        previewScale.value = newScale
+    }
+}
+
+// 拖拽功能 - 阻止浏览器默认拖拽行为
+const handlePreviewMouseDown = (e) => {
+    // 鼠标中键(滚轮键)点击关闭预览
+    if (e.button === 1) {
+        e.preventDefault()
+        closePreview()
+        return
+    }
+    // 视频模式下：只有边框能拖拽，视频本体不响应
+    if (previewIsVideo.value) return
+    // 图片模式：正常拖拽
+    e.preventDefault()
+    isDraggingPreview.value = true
+    isScaling.value = false // 拖拽时禁用缩放过渡
+    if (scaleTimeout) clearTimeout(scaleTimeout)
+    dragStartX.value = e.clientX
+    dragStartY.value = e.clientY
+    dragStartTranslateX.value = previewTranslateX.value
+    dragStartTranslateY.value = previewTranslateY.value
+}
+
+// 统一的鼠标移动处理（用于 overlay）
+const handleUnifiedMouseMove = (e) => {
+    if (!isDraggingPreview.value) return
+    e.preventDefault()
+    const dx = e.clientX - dragStartX.value
+    const dy = e.clientY - dragStartY.value
+    previewTranslateX.value = dragStartTranslateX.value + dx
+    previewTranslateY.value = dragStartTranslateY.value + dy
+}
+
+// 统一的鼠标松开处理
+const handleUnifiedMouseUp = () => {
+    isDraggingPreview.value = false
+}
+
+// 视频边框拖拽启动
+const handleVideoDragStart = (e) => {
+    if (!previewIsVideo.value) return
+    // 确保点击的是边框元素
+    if (!e.target.classList.contains('video-drag-border')) return
+    e.preventDefault()
+    e.stopPropagation()
+    isDraggingPreview.value = true
+    dragStartX.value = e.clientX
+    dragStartY.value = e.clientY
+    dragStartTranslateX.value = previewTranslateX.value
+    dragStartTranslateY.value = previewTranslateY.value
+}
+
+// 双击重置
+const handlePreviewDoubleClick = () => {
+    isScaling.value = true
+    previewScale.value = 1
+    previewTranslateX.value = 0
+    previewTranslateY.value = 0
+    setTimeout(() => { isScaling.value = false }, 100)
+}
+
+// 将当前预览的图片/视频设为 Lora 封面
+const setAsCover = async () => {
+    if (!previewUrl.value) {
+        message({ type: "warn", str: 'message.unknownError' });
+        return;
+    }
+    if (!loraFile.value) {
+        message({ type: "warn", str: 'message.unknownError' });
+        return;
+    }
+    try {
+        let blob, fileName
+        const url = previewUrl.value
+
+        // 处理 base64 图片
+        if (url.startsWith('data:')) {
+            const arr = url.split(',')
+            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg'
+            const bstr = atob(arr[1])
+            let n = bstr.length
+            const u8arr = new Uint8Array(n)
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n)
+            }
+            blob = new Blob([u8arr], { type: mime })
+            fileName = extractFileNameFromUrl(url)
+        } else {
+            const data = await fetch(url)
+            if (!data.ok) {
+                throw new Error('fetch failed: ' + data.status)
+            }
+            blob = await data.blob()
+            fileName = extractFileNameFromUrl(url)
+        }
+
+        await loraApi.postUplaodImg(blob, loraFile.value, fileName)
+        message({ type: "success", str: 'message.saveSuccess' })
+        // 刷新详情
+        refreshLoraInfo()
+    } catch (error) {
+        console.error('setAsCover error:', error)
+        message({ type: "warn", str: 'message.unknownError' })
+    }
+}
+
+// 辅助函数：供图片 hover 使用
+const handleCardEnter = () => {
+    // 保留占位，避免在 detail 窗口中需要特殊 hover 行为
+}
+
 const isVideoUrl = (url) => {
     if (!url) return false
     const urlLower = url.toLowerCase()
@@ -1155,6 +1437,30 @@ const isVideoUrl = (url) => {
     transition: all 0.3s;
 }
 
+.lora-raw-btn {
+    padding: 0 10px;
+    height: 28px;
+    border-radius: 14px;
+    background-color: rgba(187, 187, 187, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+    color: var(--weilin-prompt-ui-primary-text);
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    border: none;
+}
+
+.lora-raw-btn:hover {
+    background-color: rgba(255, 255, 255, 0.7);
+    transform: scale(1.02);
+}
+
 .edit-btn:hover,
 .refresh-btn:hover,
 .fetch-btn:hover,
@@ -1203,6 +1509,192 @@ input:focus {
 .word-item.is-selected {
     background: var(--weilin-prompt-ui-primary-color);
     color: #fff;
+}
+
+/* ========== 训练词卡片式布局 ========== */
+.trained-words-row td {
+    padding: 12px 12px 8px 12px !important;
+    border-bottom: none !important;
+}
+
+.trained-words-section {
+    padding: 16px 24px;
+    background: var(--weilin-prompt-ui-tag-bg);
+    border-radius: 12px;
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    display: block;
+    box-sizing: border-box;
+}
+
+.trained-words-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.trained-words-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--weilin-prompt-ui-label);
+    font-weight: 500;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.trained-words-label .help-icon {
+    fill: var(--weilin-prompt-ui-label);
+    opacity: 0.7;
+    width: 14px;
+    height: 14px;
+}
+
+.word-selection-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--weilin-prompt-ui-label);
+    margin-left: auto;
+}
+
+.word-selection-bar .copy-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    border-radius: 10px;
+    background: var(--weilin-prompt-ui-primary-color);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.word-selection-bar .copy-btn:hover {
+    opacity: 0.85;
+}
+
+/* 词云布局 - 居中对齐 */
+.word-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    justify-content: center;
+    align-items: center;
+}
+
+.word-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 14px;
+    height: 30px;
+    border-radius: 15px;
+    background: #fff;
+    color: #222;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    max-width: 100%;
+    user-select: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.word-tag:hover {
+    background: #f5f5f5;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.word-tag.is-selected {
+    background: var(--weilin-prompt-ui-primary-color);
+    color: #fff;
+    border-color: var(--weilin-prompt-ui-primary-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.word-tag.is-selected .civitai-icon {
+    fill: #fff;
+    opacity: 0.95;
+}
+
+.word-tag.is-hidden {
+    display: none;
+}
+
+.word-tag .word-text {
+    line-height: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.word-tag .civitai-icon {
+    fill: var(--weilin-prompt-ui-primary-color);
+    opacity: 0.9;
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+}
+
+.word-tag .word-count {
+    color: #666;
+    font-size: 11px;
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.06);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+.word-tag.is-selected .word-count {
+    background: rgba(255, 255, 255, 0.22);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* 展开收起横条 */
+.toggle-bar {
+    display: flex;
+    justify-content: center;
+    margin-top: 14px;
+}
+
+.toggle-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 18px;
+    height: 30px;
+    border-radius: 15px;
+    background: #fff;
+    color: var(--weilin-prompt-ui-primary-color);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    user-select: none;
+}
+
+.toggle-pill:hover {
+    background: var(--weilin-prompt-ui-primary-color);
+    color: #fff;
+    border-color: var(--weilin-prompt-ui-primary-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* 动画 */
@@ -1386,19 +1878,227 @@ input:focus {
     }
 }
 
-.word-item .is-hidden {
-    display: none;
+/* ========== 预览弹窗样式 ========== */
+.preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2147483647;
+    cursor: zoom-out;
+    pointer-events: auto;
 }
 
-.toggle-btn {
+.preview-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    z-index: 2147483648;
+}
+
+.preview-click-area {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    cursor: zoom-out;
+}
+
+.preview-close-btn {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
     cursor: pointer;
-    color: var(--primary-color);
-    text-align: center;
-    padding: 4px;
-    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 2147483649;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-.toggle-btn:hover {
-    text-decoration: underline;
+.preview-close-btn:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: scale(1.1);
+}
+
+.preview-set-cover-btn {
+    position: fixed;
+    top: 60px;
+    right: 72px;
+    height: 44px;
+    padding: 0 16px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    z-index: 2147483649;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.preview-set-cover-btn:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+}
+
+.preview-set-cover-btn svg {
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+.preview-hint {
+    position: fixed;
+    top: 120px;
+    right: 4px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    line-height: 1.7;
+    text-align: right;
+    pointer-events: none;
+    z-index: 2147483647;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 6px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.preview-content-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    will-change: transform;
+}
+
+.preview-content-wrapper.is-dragging {
+    cursor: grabbing;
+}
+
+.preview-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.preview-content img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-drag: none;
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    box-shadow: 0 8px 64px rgba(0, 0, 0, 0.5);
+}
+
+/* 视频预览 - 带可拖拽的边框 */
+.video-drag-frame {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.video-drag-border {
+    position: absolute;
+    background: transparent;
+    z-index: 2;
+}
+
+.video-drag-border.top {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    cursor: ns-resize;
+}
+
+.video-drag-border.bottom {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    cursor: ns-resize;
+}
+
+.video-drag-border.left {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 20px;
+    cursor: ew-resize;
+}
+
+.video-drag-border.right {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 20px;
+    cursor: ew-resize;
+}
+
+.video-drag-border:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.video-drag-frame video {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    box-shadow: 0 8px 64px rgba(0, 0, 0, 0.5);
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* 响应式：小屏设备 */
+@media (max-width: 768px) {
+    .preview-close-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 22px;
+        top: 12px;
+        right: 12px;
+    }
+
+    .preview-set-cover-btn {
+        padding: 8px 14px;
+        font-size: 12px;
+        top: 12px;
+        right: 60px;
+    }
+
+    .preview-hint {
+        font-size: 10px;
+        bottom: 12px;
+    }
 }
 </style>
