@@ -271,7 +271,7 @@ const handleHeaderMouseDown = (event) => {
 
 <style scoped>
 .weilin_prompt_ui_draggable-window {
-  position: absolute;
+  position: fixed;
   background: var(--weilin-prompt-ui-primary-bg);
   border: 1px solid var(--weilin-prompt-ui-border-color);
   border-radius: 8px;

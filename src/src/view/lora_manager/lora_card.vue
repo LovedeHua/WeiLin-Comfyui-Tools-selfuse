@@ -1530,7 +1530,7 @@ input:focus {
     position: fixed;
     width: 520px;
     height: 400px;
-    z-index: 999999999;
+    z-index: 500;
     border: 1px solid var(--weilin-prompt-ui-border-color);
     border-radius: 4px;
     background-color: var(--weilin-prompt-ui-primary-bg);
@@ -1551,11 +1551,9 @@ input:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2147483647;
-    /* 使用最大可能的 z-index 值 */
+    z-index: 1000;
     cursor: zoom-out;
     pointer-events: auto;
-    /* 确保 Teleport 后的元素也能继承 scoped 样式 */
 }
 
 .preview-container {
@@ -1564,8 +1562,7 @@ input:focus {
     align-items: center;
     justify-content: center;
     cursor: default;
-    z-index: 2147483648;
-    /* 比 overlay 更高 */
+    z-index: 1001;
 }
 
 .preview-click-area {
@@ -1595,7 +1592,7 @@ input:focus {
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
-    z-index: 2147483649;
+    z-index: 1002;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -1621,7 +1618,7 @@ input:focus {
     align-items: center;
     gap: 6px;
     transition: all 0.2s ease;
-    z-index: 2147483649;
+    z-index: 1003;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -1644,7 +1641,7 @@ input:focus {
     line-height: 1.7;
     text-align: right;
     pointer-events: none;
-    z-index: 2147483647;
+    z-index: 1002;
     background: rgba(0, 0, 0, 0.5);
     padding: 6px 8px;
     border-radius: 4px;

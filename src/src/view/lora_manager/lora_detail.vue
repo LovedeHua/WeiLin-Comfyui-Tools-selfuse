@@ -397,6 +397,7 @@ const isOpen = ref(false)
 const loraContent = ref()
 const fileInput = ref(null)
 const loraFile = ref('')
+const onDetailClose = ref(null);
 
 
 const userEditFields = ref({}) // 用户自定义字段
@@ -464,6 +465,10 @@ onUnmounted(() => {
 // 关闭窗口
 const closeWindow = (windowName) => {
     isOpen.value = false
+    if (onDetailClose.value) {
+        onDetailClose.value();
+        onDetailClose.value = null;
+    }
 }
 
 // 更新窗口位置
@@ -486,6 +491,7 @@ const open = (loraData) => {
     windowManager.setActiveWindow('loraDetail')
     loading.value = true
     loraInfo.value = loraData
+    onDetailClose.value = loraData.onClose || null;
     nextTick(() => {
         init()
     })
@@ -1889,7 +1895,7 @@ input:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2147483647;
+    z-index: 1000;
     cursor: zoom-out;
     pointer-events: auto;
 }
@@ -1900,7 +1906,7 @@ input:focus {
     align-items: center;
     justify-content: center;
     cursor: default;
-    z-index: 2147483648;
+    z-index: 1001;
 }
 
 .preview-click-area {
@@ -1930,7 +1936,7 @@ input:focus {
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
-    z-index: 2147483649;
+    z-index: 1002;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -1956,7 +1962,7 @@ input:focus {
     align-items: center;
     gap: 6px;
     transition: all 0.2s ease;
-    z-index: 2147483649;
+    z-index: 1003;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -1979,7 +1985,7 @@ input:focus {
     line-height: 1.7;
     text-align: right;
     pointer-events: none;
-    z-index: 2147483647;
+    z-index: 1002;
     background: rgba(0, 0, 0, 0.5);
     padding: 6px 8px;
     border-radius: 4px;

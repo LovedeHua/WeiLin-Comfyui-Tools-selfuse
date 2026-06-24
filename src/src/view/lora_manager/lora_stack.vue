@@ -13,14 +13,14 @@
             <div :class="`${prefix}lora-body`">
                 <div :class="`${prefix}lora-list`">
                     <div v-for="(lora, idx) in selectedLoras" ref="loraStackItemRef" :key="lora.name" class="lora-item"
-                        :class="{ 'hidden-lora': lora.hidden }" @mouseover="(e) => handleMouseHover(lora.lora, e)"
+                        :class="{ 'hidden-lora': lora.hidden }" @mouseenter="(e) => handleMouseHover(lora.lora, e)"
                         @mouseleave="handleMouseLeave" draggable="true" @dragstart="handleDragStart(idx)"
                         @dragover.prevent @drop="handleDrop(idx)">
                         <div class="lora-info">
                             <div class="lora-header">
                                 <span class="lora-name" :title="lora.name">{{ lora.name }}</span>
                                 <div class="lora-actions">
-                                    <button class="look-on-btn" @click="lookOnLora(lora)"
+                                    <button class="look-on-btn" @click.stop.prevent="lookOnLora(lora)"
                                         :title="t('controls.lookOnLora')">
                                         <svg viewBox="0 0 1024 1024" width="14" height="14">
                                             <path
@@ -74,7 +74,8 @@
         </div>
         <loraDetail ref="loraDetailLoraStackRef" />
         <LoraCard ref="loraCardItem" v-if="showCard" :fileNmae="hoveFileName" :paddingLeft="paddingLeftValue"
-            :paddingTop="paddingTopValue" @cardLeave="handleEnterLeave" @cardenter="handEnterCard" />
+            :paddingTop="paddingTopValue" @cardLeave="handleEnterLeave" @cardenter="handEnterCard"
+            @openDetail="handleOpenDetailFromCard" />
 
     </div>
 </template>
@@ -100,6 +101,7 @@ const loraStackItemRef = ref()
 const isEnterCatd = ref(false)
 const isHovering = ref(false);
 const loraCardItem = ref()
+const isDetailOpen = ref(false);
 
 // 打开Lora管理器
 const openLoraManager = () => {
@@ -115,6 +117,7 @@ const toggleHideLora = (lora) => {
 
 const handleMouseHover = (fileName, event) => {
     isHovering.value = true;
+    if (isDetailOpen.value) return;
     if (hoveFileName.value === fileName && showCard.value) return;
 
     const hoveredCard = event.currentTarget;
@@ -215,8 +218,29 @@ const removeLora = (lora) => {
 const loraDetailLoraStackRef = ref()
 
 const lookOnLora = (loraData) => {
-    // console.log('lookOnLora', loraData)
-    loraDetailLoraStackRef.value.open({ name: loraData.lora })
+    // 先关闭悬浮信息窗口，避免层级冲突覆盖顶栏
+    showCard.value = false
+    hoveFileName.value = ""
+    isEnterCatd.value = false
+    isDetailOpen.value = true;
+    nextTick(() => {
+        loraDetailLoraStackRef.value.open({ name: loraData.lora || loraData.name, onClose: () => {
+            isDetailOpen.value = false;
+        } })
+    })
+}
+
+// 从悬浮信息窗口内部点击"详情"按钮打开详情
+const handleOpenDetailFromCard = (data) => {
+    showCard.value = false
+    hoveFileName.value = ""
+    isEnterCatd.value = false
+    isDetailOpen.value = true;
+    nextTick(() => {
+        loraDetailLoraStackRef.value.open({ name: data?.name || data, onClose: () => {
+            isDetailOpen.value = false;
+        } })
+    })
 }
 
 // 监听来自Lora管理器的消息
