@@ -30,6 +30,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
+import { isTrustedMessage } from '@/utils/post_message'
 import { useI18n } from 'vue-i18n'
 
 const prefix = "weilin_prompt_ui_"
@@ -39,6 +40,7 @@ const nodeLists = ref([])
 
 // 监听来自Lora管理器的消息
 window.addEventListener('message', (event) => {
+    if (!isTrustedMessage(event)) return
     if (event.data.type === 'weilin_prompt_ui_update_node_list_info') {
         nodeLists.value = event.data.nodeList
         // console.log(nodeLists.value)

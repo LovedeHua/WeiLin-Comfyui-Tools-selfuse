@@ -1,0 +1,7 @@
+# WeiLin Dynamic Prompts 通配符示例
+# 用法：提示词中写 __colors__ 即从此文件随机选一行
+# 每行一个变体，# 开头为注释，支持子目录（__sub/name__ → wildcards/sub/name.txt）
+red
+blue
+green
+golden

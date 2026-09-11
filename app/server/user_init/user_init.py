@@ -167,6 +167,26 @@ def update_auto_limit_setting(new_setting: int):
     return True
 
 
+def get_history_limit_setting():
+    """获取history_limit参数（历史记录上限，<=0 表示不限制），不存在则写默认值 500"""
+    data = read_init_file() or {}
+
+    if 'history_limit' not in data:
+        data['history_limit'] = 500
+        with open(init_file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+    return data['history_limit']
+
+def update_history_limit_setting(new_setting: int):
+    """更新history_limit参数"""
+    data = read_init_file() or {}
+    data['history_limit'] = new_setting
+    with open(init_file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    return True
+
+
 
 def get_random_template_setting():
     """获取random_template参数，如果不存在则添加默认值"""

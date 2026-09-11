@@ -34,6 +34,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { isTrustedMessage } from '@/utils/post_message'
 import { useI18n } from 'vue-i18n'
 import tranToWeb from './tranToWeb.vue';
 import SettingDialog from '../view/prompt_box/components/setting_dialog.vue'
@@ -156,13 +157,35 @@ for (let i = 0; i < savedFloatingBallCount.value; i++) {
 }
 
 // 开始拖拽
+// 拖拽事件处理器缓存（key: 球索引）——保证 add/remove 使用同一函数引用，否则 removeEventListener 失效导致监听器泄漏
+const dragHandlers = new Map()
+const getDragHandlers = (i) => {
+    if (!dragHandlers.has(i)) {
+        dragHandlers.set(i, {
+            move: (e) => onDrag(e, i),
+            up: (e) => stopDrag(e, i),
+        })
+    }
+    return dragHandlers.get(i)
+}
+
+// 组件卸载时清理所有球的拖拽监听
+const removeAllDragListeners = () => {
+    dragHandlers.forEach((h) => {
+        document.removeEventListener('mousemove', h.move)
+        document.removeEventListener('mouseup', h.up)
+    })
+    dragHandlers.clear()
+}
+
 const startDrag = (event, i) => {
     // 判断点击是否在悬浮球本体或其直接子元素上
     const target = event.target;
     if (target.closest('.weilin_prompt_ui_floating-ball')) {
         isDragging.value[i] = true;
-        document.addEventListener('mousemove', (e) => onDrag(e, i));
-        document.addEventListener('mouseup', (e) => stopDrag(e, i));
+        const h = getDragHandlers(i)
+        document.addEventListener('mousemove', h.move);
+        document.addEventListener('mouseup', h.up);
     }
 };
 
@@ -206,8 +229,9 @@ const onDrag = (event, i) => {
 // 停止拖拽
 const stopDrag = (event, i) => {
     isDragging.value[i] = false;
-    document.removeEventListener('mousemove', (e) => onDrag(e, i));
-    document.removeEventListener('mouseup', (e) => stopDrag(e, i));
+    const h = getDragHandlers(i)
+    document.removeEventListener('mousemove', h.move);
+    document.removeEventListener('mouseup', h.up);
 };
 
 // 点击悬浮球
@@ -258,6 +282,7 @@ const openTranToWebDialog = () => {
 
 // 监听悬浮球设置
 const handleMessage = (event) => {
+    if (!isTrustedMessage(event)) return
     if (event.data.type === 'weilin_prompt_ui_floating_ball_setting') {
         savedFloatingBallCount.value = parseInt(localStorage.getItem('weilin_prompt_ui_floatingBallCount')) || 1;
         savedFloatingBallSize.value = parseInt(localStorage.getItem('weilin_prompt_ui_floatingBallSize')) || 66;
@@ -352,8 +377,8 @@ onMounted(() => {
 onUnmounted(() => {
     // 移除消息监听
     window.removeEventListener('message', handleMessage)
-    document.removeEventListener('mousemove', onDrag);
-    document.removeEventListener('mouseup', stopDrag);
+    // 清理所有拖拽监听（防止泄漏）
+    removeAllDragListeners()
 });
 </script>
 

@@ -40,7 +40,7 @@ class BingTokenManager:
             "sec-mesh-client-webview": "0",
             "x-edge-shopping-flag": "1",
         }
-        resp = requests.get(url, headers=headers)
+        resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         return resp.text.strip()
 
@@ -62,7 +62,7 @@ def bing_translate(text, from_lang="zh-Hans", to_lang="en"):
         "sec-fetch-storage-access": "active"
     }
     body = [{"Text": text}]
-    resp = requests.post(url, headers=headers, json=body)
+    resp = requests.post(url, headers=headers, json=body, timeout=10)
     resp.raise_for_status()
     return resp.json()
 

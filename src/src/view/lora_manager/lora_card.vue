@@ -272,6 +272,7 @@
                             <!-- 图片元素 -->
                             <img
                                 :src="img.url"
+                                loading="lazy"
                                 v-show="!(img.type === 'video' || isVideoUrl(img.url))"
                                 @mouseenter="handleCardEnter"
                                 @click.stop="openPreview(img.url, img)"
@@ -524,7 +525,6 @@ const init = () => {
         .then((res) => {
             // 如果当前悬浮窗口已经切换到其他lora，丢弃旧数据
             if (currentRequestFile.value !== targetFile) {
-                console.log('丢弃过期响应:', targetFile);
                 return;
             }
             loraInfo.value = res.data;

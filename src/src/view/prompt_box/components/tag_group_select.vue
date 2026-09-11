@@ -100,6 +100,7 @@
 <script setup>
 import Dialog from '@/components/Dialog.vue'
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { isTrustedMessage } from '@/utils/post_message'
 import { useI18n } from 'vue-i18n'
 import { tagsApi } from '@/api/tags'
 import message from '@/utils/message'
@@ -327,6 +328,7 @@ const clearAllSelected = () => {
 
 // 处理消息
 const handleMessage = (event) => {
+  if (!isTrustedMessage(event)) return
   // console.log(event.data.type)
   if (event.data.type === 'weilin_prompt_ui_tag_manager_refresh_select') {
     refreshTagsGoThis()

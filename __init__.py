@@ -1,5 +1,6 @@
 
 from .app.server.prompt_server import *
+from .app.server.prompt_api.dynamic_prompts import expand_dynamic_prompts, has_dynamic_syntax
 import comfy.lora
 import comfy.utils
 import logging
@@ -75,6 +76,16 @@ class WeiLinPromptUI:
     def IS_CHANGED(self, auto_random, **kwargs):
         if auto_random == True:
             return float("nan")
+        # 文本含 Dynamic Prompts 语法（{a|b|c} / __wildcard__）时强制重执行，随机才能生效
+        try:
+            positive = kwargs.get('positive', '')
+            check_text = positive
+            if is_json(positive):
+                check_text = json.loads(positive).get('prompt', '')
+            if has_dynamic_syntax(check_text) or has_dynamic_syntax(kwargs.get('opt_text', '') or ''):
+                return float("nan")
+        except Exception:
+            pass
 
     @classmethod
     def INPUT_TYPES(self):
@@ -140,13 +151,22 @@ class WeiLinPromptUI:
         if is_json(positive):
             json_object = json.loads(positive)
             lora_list = json_object.get("lora", None)
+            json_prompt = json_object.get("prompt", "")
             if len(opt_text) > 0:
-                text_dec = opt_text + ", " + json_object.get("prompt", "")
+                # prompt 为空时不拼 ", "，避免产生 ", ," 或结尾多余逗号
+                if len(json_prompt) > 0:
+                    text_dec = opt_text + ", " + json_prompt
+                else:
+                    text_dec = opt_text
             else:
-                text_dec = json_object.get("prompt", "")
+                text_dec = json_prompt
         else:
             if len(opt_text) > 0:
-                text_dec = opt_text + ", "+positive
+                # positive 为空时不拼 ", "，避免产生 ", ," 或结尾多余逗号
+                if len(positive) > 0:
+                    text_dec = opt_text + ", "+positive
+                else:
+                    text_dec = opt_text
             else:
                 text_dec = positive
         if len(lora_str) > 0:
@@ -160,10 +180,17 @@ class WeiLinPromptUI:
                 if len(random_tag["random_tags"]) > 0:
                     positive = random_tag["random_tags"]
                     self.positive = positive
-                    if len(opt_text) > 0:
-                        text_dec = opt_text + ", "+positive
+                    # 追加到已有 text_dec（而非覆盖），保证"固定提示词 + 随机标签"都保留
+                    if len(text_dec) > 0:
+                        text_dec = text_dec + ", " + positive
                     else:
                         text_dec = positive
+
+        # Dynamic Prompts 语法展开（{a|b|c} / __wildcard__），随机变体在 lora 标签提取前生效
+        try:
+            text_dec = expand_dynamic_prompts(text_dec)
+        except Exception:
+            pass
 
         wlr_pattern = r'<wlr:([^:]+):([^:]+):([^>]+)>'
         wlr_matches = re.findall(wlr_pattern, text_dec)
@@ -336,6 +363,16 @@ class WeiLinPromptUIWithoutLora:
     def IS_CHANGED(self, auto_random, **kwargs):
         if auto_random == True:
             return float("nan")
+        # 文本含 Dynamic Prompts 语法（{a|b|c} / __wildcard__）时强制重执行，随机才能生效
+        try:
+            positive = kwargs.get('positive', '')
+            check_text = positive
+            if is_json(positive):
+                check_text = json.loads(positive).get('prompt', '')
+            if has_dynamic_syntax(check_text) or has_dynamic_syntax(kwargs.get('opt_text', '') or ''):
+                return float("nan")
+        except Exception:
+            pass
 
     @classmethod
     def INPUT_TYPES(self):
@@ -380,13 +417,22 @@ class WeiLinPromptUIWithoutLora:
         text_dec = ""
         if is_json(positive):
             json_object = json.loads(positive)
+            json_prompt = json_object.get("prompt", "")
             if len(opt_text) > 0:
-                text_dec = opt_text + ", " + json_object.get("prompt", "")
+                # prompt 为空时不拼 ", "，避免产生 ", ," 或结尾多余逗号
+                if len(json_prompt) > 0:
+                    text_dec = opt_text + ", " + json_prompt
+                else:
+                    text_dec = opt_text
             else:
-                text_dec = json_object.get("prompt", "")
+                text_dec = json_prompt
         else:
             if len(opt_text) > 0:
-                text_dec = opt_text + ", "+positive
+                # positive 为空时不拼 ", "，避免产生 ", ," 或结尾多余逗号
+                if len(positive) > 0:
+                    text_dec = opt_text + ", "+positive
+                else:
+                    text_dec = opt_text
             else:
                 text_dec = positive
 
@@ -396,10 +442,17 @@ class WeiLinPromptUIWithoutLora:
                 random_tag = go_run_node_auto_random_tag(random_template)
                 if len(random_tag["random_tags"]) > 0:
                     positive = random_tag["random_tags"]
-                    if len(opt_text) > 0:
-                        text_dec = opt_text + ", "+positive
+                    # 追加到已有 text_dec（而非覆盖），保证"固定提示词 + 随机标签"都保留
+                    if len(text_dec) > 0:
+                        text_dec = text_dec + ", " + positive
                     else:
                         text_dec = positive
+
+        # Dynamic Prompts 语法展开（{a|b|c} / __wildcard__）
+        try:
+            text_dec = expand_dynamic_prompts(text_dec)
+        except Exception:
+            pass
 
         if opt_clip is not None:
             tokens = opt_clip.tokenize(text_dec)

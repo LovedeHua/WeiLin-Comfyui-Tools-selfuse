@@ -26,5 +26,3 @@ initI18n()
 app.config.globalProperties.$copyText  = toClipboard
 app.mount(div)
 
-console.log("WeiLin Prompt UI is running - version "+version)
-console.log("WeiLin 节点插件已运行 - 版本 "+version)

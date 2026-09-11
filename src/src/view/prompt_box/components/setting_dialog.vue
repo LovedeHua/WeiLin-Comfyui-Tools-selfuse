@@ -12,6 +12,9 @@
           <li :class="{ 'weilin-comfyui-active': selectedSetting === 'setting_auto_complete_limit' }"
             @click="selectSetting('setting_auto_complete_limit')">{{
               t('promptBox.settings.setting_auto_complete_limit') }}</li>
+          <li :class="{ 'weilin-comfyui-active': selectedSetting === 'setting_history_limit' }"
+            @click="selectSetting('setting_history_limit')">{{
+              t('promptBox.settings.setting_history_limit') }}</li>
           <li :class="{ 'weilin-comfyui-active': selectedSetting === 'setting_floating_ball' }"
             @click="selectSetting('setting_floating_ball')">{{
               t('promptBox.settings.setting_floating_ball') }}</li>
@@ -167,6 +170,20 @@
             </button>
           </div>
         </div>
+        <div v-if="selectedSetting === 'setting_history_limit'">
+          <h3>{{ t('promptBox.settings.setting_history_limit') }}</h3>
+          <div class="weilin-comfyui-floating-ball-settings">
+            <div class="weilin-comfyui-setting-item">
+              <label>{{ t('promptBox.settings.history_limit_label') }}</label>
+              <input type="number" v-model.number="saveHistoryLimit" min="0" max="99999999" style="width: 100px;"
+                :placeholder="t('promptBox.settings.history_limit_placeholder')" />
+            </div>
+            <div class="weilin-comfyui-note-top">{{ t('promptBox.settings.history_limit_desc') }}</div>
+            <button class="weilin-comfyui-save-button" @click="applyHistoryLimitSetting">
+              {{ t('promptBox.settings.save') }}
+            </button>
+          </div>
+        </div>
         <div v-if="selectedSetting === 'setting_function_toggles'">
           <h3>{{ t('promptBox.settings.setting_function_toggles_full') }}</h3>
           <div class="weilin-comfyui-floating-ball-settings">
@@ -206,6 +223,13 @@
                 {{ t('promptBox.settings.enableClearDisabled') }}
               </label>
             </div>
+            <div class="weilin-comfyui-setting-item">
+              <label>
+                <input type="checkbox" v-model="isDisableAutoRandom" />
+                {{ t('promptBox.settings.disableAutoRandom') }}
+              </label>
+            </div>
+            <div class="weilin-comfyui-note-top">{{ t('promptBox.settings.disableAutoRandomDesc') }}</div>
             <button class="weilin-comfyui-save-button" @click="saveFunctionToggles">
               {{ t('promptBox.settings.save') }}
             </button>
@@ -440,6 +464,7 @@ import { useI18n } from 'vue-i18n'
 const emit = defineEmits(['functionTogglesUpdated'])
 import { translatorApi } from '@/api/translator'
 import { autocompleteApi } from '@/api/autocomplete'
+import { historyApi } from '@/api/history'
 import message from '@/utils/message'
 import { languageApi } from '@/api/language'
 import { openaiApi } from '@/api/openai'
@@ -484,6 +509,7 @@ const isRandomTagEnabled = ref(localStorage.getItem('weilin_function_toggles_ran
 const isRandomTagSettingsEnabled = ref(localStorage.getItem('weilin_function_toggles_randomTagSettings') !== 'false'); // 默认true
 const isTranslateTagEnabled = ref(localStorage.getItem('weilin_function_toggles_translateTag') !== 'false'); // 默认true
 const isClearDisabledEnabled = ref(localStorage.getItem('weilin_function_toggles_clearDisabled') !== 'false'); // 默认true
+const isDisableAutoRandom = ref(localStorage.getItem('weilin_function_toggles_disableAutoRandom') === 'true'); // 默认false
 
 const selectedTranslatorService = ref('');
 const sourceLanguage = ref('');
@@ -508,6 +534,7 @@ const testTranslaterInputText = ref('')
 const testTranslaterOutputText = ref('')
 
 const saveAutoCompleteLimit = ref(25)
+const saveHistoryLimit = ref(500)
 const saveAutoCompleteWidth = ref(localStorage.getItem('weilin_prompt_ui_auto_box_width') || 450);
 const saveAutoCompleteHeight = ref(localStorage.getItem('weilin_prompt_ui_auto_box_height') || 350);
 
@@ -515,6 +542,8 @@ const selectSetting = (setting) => {
   selectedSetting.value = setting
   if (setting == "setting_auto_complete_limit") {
     getAutoCompleteSetting();
+  } else if (setting == "setting_history_limit") {
+    getHistoryLimitSetting();
   }
 }
 
@@ -571,6 +600,7 @@ const saveFunctionToggles = () => {
   localStorage.setItem('weilin_function_toggles_randomTagSettings', isRandomTagSettingsEnabled.value);
   localStorage.setItem('weilin_function_toggles_translateTag', isTranslateTagEnabled.value);
   localStorage.setItem('weilin_function_toggles_clearDisabled', isClearDisabledEnabled.value);
+  localStorage.setItem('weilin_function_toggles_disableAutoRandom', isDisableAutoRandom.value);
 
   // 通知父组件更新功能开关状态
   emit('functionTogglesUpdated', {
@@ -579,7 +609,8 @@ const saveFunctionToggles = () => {
     randomTag: isRandomTagEnabled.value,
     randomTagSettings: isRandomTagSettingsEnabled.value,
     translateTag: isTranslateTagEnabled.value,
-    clearDisabled: isClearDisabledEnabled.value
+    clearDisabled: isClearDisabledEnabled.value,
+    disableAutoRandom: isDisableAutoRandom.value
   });
 
   message({ type: "success", str: 'message.saveSuccess' });
@@ -899,6 +930,30 @@ const saveAutoCompleteSetting = async () => {
   })
 }
 
+// 历史记录上限：0 表示不限制
+const getHistoryLimitSetting = async () => {
+  await historyApi.getHistoryLimit().then(res => {
+    saveHistoryLimit.value = res.data
+  }).catch(err => {
+    console.error(err)
+    message({ type: "warn", str: 'message.networkError' });
+  })
+};
+
+const applyHistoryLimitSetting = async () => {
+  const limit = Number(saveHistoryLimit.value)
+  if (Number.isNaN(limit) || limit < 0) {
+    message({ type: "warn", str: 'message.networkError' });
+    return
+  }
+  await historyApi.updateHistoryLimit(Math.floor(limit)).then(res => {
+    message({ type: "success", str: 'message.saveSuccess' });
+  }).catch(err => {
+    console.error(err)
+    message({ type: "warn", str: 'message.networkError' });
+  })
+}
+
 const retLanguageName = (code) => {
   const lang = language.find(lang => lang.translator === code);
   return lang ? lang.language : code;
@@ -920,28 +975,40 @@ onUnmounted(() => {
 });
 
 
-defineExpose({
-  open: () => {
-    selectedSetting.value = 'translator'
-    selectedTranslator.value = 'baidu' // 默认选择的翻译器
-    translationText.value = '' // 输入框内容
-    // 新增语言选择相关状态
-    savedSourceLanguage.value = localStorage.getItem('weilin_prompt_ui_sourceLanguage') || 'english';
-    savedTargetLanguage.value = localStorage.getItem('weilin_prompt_ui_targetLanguage') || 'chinese_simplified';
-    // 新增悬浮球设置相关状态
-    savedFloatingBallCount.value = localStorage.getItem('weilin_prompt_ui_floatingBallCount') || 1;
-    savedFloatingBallSize.value = localStorage.getItem('weilin_prompt_ui_floatingBallSize') || 5;
-    isFloatingBallEnabled.value = localStorage.getItem('weilin_prompt_ui_floatingBallEnabled') === 'true';
-    // 提示词设置
-    isCommaConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_comma_conversion') === 'true';
-    isPeriodConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_period_conversion') === 'true';
-    isBracketConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_bracket_conversion') === 'true';
-    isAngleBracketConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_angle_bracket_conversion') === 'true';
-    isUnderscoreToBracketEnabled.value = localStorage.getItem('weilin_prompt_ui_underscore_to_bracket') === 'true';
-    isCommaCloseAutocompleteEnabled.value = localStorage.getItem('weilin_prompt_ui_comma_close_autocomplete') === 'true';
+const openDialog = () => {
+  selectedSetting.value = 'translator'
+  selectedTranslator.value = 'baidu' // 默认选择的翻译器
+  translationText.value = '' // 输入框内容
+  // 新增语言选择相关状态
+  savedSourceLanguage.value = localStorage.getItem('weilin_prompt_ui_sourceLanguage') || 'english';
+  savedTargetLanguage.value = localStorage.getItem('weilin_prompt_ui_targetLanguage') || 'chinese_simplified';
+  // 新增悬浮球设置相关状态
+  savedFloatingBallCount.value = localStorage.getItem('weilin_prompt_ui_floatingBallCount') || 1;
+  savedFloatingBallSize.value = localStorage.getItem('weilin_prompt_ui_floatingBallSize') || 5;
+  isFloatingBallEnabled.value = localStorage.getItem('weilin_prompt_ui_floatingBallEnabled') === 'true';
+  // 提示词设置
+  isCommaConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_comma_conversion') === 'true';
+  isPeriodConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_period_conversion') === 'true';
+  isBracketConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_bracket_conversion') === 'true';
+  isAngleBracketConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_angle_bracket_conversion') === 'true';
+  isUnderscoreToBracketEnabled.value = localStorage.getItem('weilin_prompt_ui_underscore_to_bracket') === 'true';
+  isCommaCloseAutocompleteEnabled.value = localStorage.getItem('weilin_prompt_ui_comma_close_autocomplete') === 'true';
 
-    dialogVisible.value = true
+  dialogVisible.value = true
+}
+
+// 开关式打开：已打开时再次调用关闭对话框
+const toggleDialog = () => {
+  if (dialogVisible.value) {
+    dialogVisible.value = false
+  } else {
+    openDialog()
   }
+}
+
+defineExpose({
+  open: openDialog,
+  toggle: toggleDialog
 })
 </script>
 

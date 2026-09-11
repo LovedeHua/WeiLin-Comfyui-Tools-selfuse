@@ -11,7 +11,7 @@ def youdao_translate(q, from_lang='Auto', to_lang='Auto'):
         'from': from_lang,
         'to': to_lang
     }
-    information = requests.post('https://aidemo.youdao.com/trans', data)
+    information = requests.post('https://aidemo.youdao.com/trans', data, timeout=10)
     json_data = information.json()
     errorCode = json_data['errorCode']
     if errorCode != '0':

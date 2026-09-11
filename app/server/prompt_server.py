@@ -47,9 +47,15 @@ async def _getWeiLinPromptUIWebJs(request):
 async def _getWeiLinPromptUIFile(request):
     file_path = request.match_info.get('file_path', '')
     full_path = os.path.join(static_path, file_path)
+    # 安全校验：解析真实路径，必须仍在 static_path 目录内，防止 ../ 路径穿越读取任意文件
+    base_real = os.path.realpath(static_path)
+    target_real = os.path.realpath(full_path)
+    if not (target_real == base_real or target_real.startswith(base_real + os.sep)):
+        print("[WeiLin] 拒绝越权文件访问:", file_path)
+        raise web.HTTPForbidden()
     # 检查文件路径是否存在
-    if os.path.isfile(full_path):
-        return web.FileResponse(full_path)
+    if os.path.isfile(target_real):
+        return web.FileResponse(target_real)
     raise web.HTTPNotFound()
 
 # ============================================= Lora列表获取 ============================================
@@ -365,6 +371,18 @@ async def _move_tag(request):
     return web.json_response({"info": result})
 
 
+@PromptServer.instance.routes.post(baseUrl+"prompt/move_tag_to_group")
+async def _move_tag_to_group(request):
+    data = await request.json()
+    try:
+        result = await move_tag_to_group(data['id_index'], data['g_uuid'])
+    except Exception as e:
+        print(f"Error: {e}")
+        return web.Response(status=500)
+
+    return web.json_response({"info": result})
+
+
 @PromptServer.instance.routes.post(baseUrl+"prompt/get_groups_list")
 async def _get_groups_list(request):
     try:
@@ -519,6 +537,17 @@ async def _batch_delete_history(request):
 
     return web.json_response({"info": delete_info})
 
+
+@PromptServer.instance.routes.post(baseUrl+"prompt/history/clear_history")
+async def _clear_history(request):
+    try:
+        clear_info = await clear_history()  # 清空全部历史记录（软删除）
+    except Exception as e:
+        print(f"Error: {e}")
+        return web.Response(status=500)
+
+    return web.json_response({"info": clear_info})
+
 # =====================================================================================================
 
 # ================================= 收藏历史记录功能 =================================
@@ -661,6 +690,29 @@ async def _update_auto_limit_setting(request):
     data = await request.json()
     try:
         update_auto_limit_setting(data.get('limit'))  # 获取设置的参数信息
+    except Exception as e:
+        print(f"Error: {e}")
+        return web.Response(status=500)
+
+    return web.json_response({"info": 'ok'})
+
+
+@PromptServer.instance.routes.post(baseUrl+"get/setting/get_history_limit_setting")
+async def _get_history_limit_setting(request):
+    try:
+        limit = get_history_limit_setting()  # 历史记录上限（<=0 表示不限制）
+    except Exception as e:
+        print(f"Error: {e}")
+        return web.Response(status=500)
+
+    return web.json_response({"data": limit})
+
+
+@PromptServer.instance.routes.post(baseUrl+"update/setting/update_history_limit_setting")
+async def _update_history_limit_setting(request):
+    data = await request.json()
+    try:
+        update_history_limit_setting(data.get('limit'))
     except Exception as e:
         print(f"Error: {e}")
         return web.Response(status=500)

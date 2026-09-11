@@ -1,5 +1,5 @@
 <template>
-    <DraggableWindow v-if="isOpen" :title="t('randomUtils.title')" :position="windows.randomRuleSetting.position"
+    <DraggableWindow v-if="isOpen" name="randomRuleSetting" :title="t('randomUtils.title')" :position="windows.randomRuleSetting.position"
         :size="windows.randomRuleSetting.size" :z-index="windowManager.getZIndex('randomRuleSetting')"
         @update:position="updatePosition('randomRuleSetting', $event)"
         @update:size="updateSize('randomRuleSetting', $event)"
@@ -181,6 +181,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { isTrustedMessage } from '@/utils/post_message'
 import { useI18n } from 'vue-i18n'
 import DraggableWindow from '@/components/DraggableWindow.vue'
 import { windowManager } from '@/utils/windowManager'
@@ -682,6 +683,7 @@ const getNodeTagTemplateIdAndReGet = () => {
 
 // 处理消息
 const handleMessage = (event) => {
+    if (!isTrustedMessage(event)) return
     if (event.data.type === 'weilin_prompt_ui_prompt_inner_get_node_tag_template_id_response') {
         // console.log(event.data.data)
         nodeLocalTemplateId.value = event.data.data

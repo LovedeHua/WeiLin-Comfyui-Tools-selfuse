@@ -4,6 +4,7 @@ import os
 import json
 import re
 import hashlib
+import asyncio
 import requests
 from datetime import datetime
 
@@ -83,7 +84,7 @@ def get_param(request, param, default=None):
       try:
           import urllib.parse
           return urllib.parse.unquote(value)
-      except:
+      except Exception:
           return value
   return default
 
@@ -104,7 +105,7 @@ def get_folder_path(file: str, model_type="loras"):
   try:
     import urllib.parse
     file = urllib.parse.unquote(file)
-  except:
+  except Exception:
     pass
   file_path = folder_paths.get_full_path(model_type, file)
   if file_path and not path_exists(file_path):
@@ -278,7 +279,7 @@ async def get_model_info(file: str,
     maybe_fetch_civitai = False
     maybe_fetch_metadata = False
 
-  network_available = _is_network_available()
+  network_available = await asyncio.to_thread(_is_network_available)
   
   should_fetch_civitai = force_fetch_civitai is True or (maybe_fetch_civitai is True and network_available and
                                                          ('civitai' not in info_data['raw'] or len(info_data['raw']['civitai']) == 0))
@@ -286,7 +287,9 @@ async def get_model_info(file: str,
                                                            ('metadata' not in info_data['raw'] or len(info_data['raw']['metadata']) == 0))
 
   if should_fetch_metadata:
-    data_meta = _get_model_metadata(file,
+    # 阻塞的网络/文件 IO 移入线程池，避免冻结事件循环
+    data_meta = await asyncio.to_thread(_get_model_metadata,
+                                    file,
                                     model_type=model_type,
                                     default={},
                                     refresh=force_fetch_metadata)
@@ -295,7 +298,8 @@ async def get_model_info(file: str,
     should_save = _merge_metadata(info_data, data_meta) or should_save
 
   if should_fetch_civitai:
-    data_civitai = _get_model_civitai_data(file,
+    data_civitai = await asyncio.to_thread(_get_model_civitai_data,
+                                           file,
                                            model_type=model_type,
                                            default={},
                                            refresh=force_fetch_civitai)
@@ -304,7 +308,7 @@ async def get_model_info(file: str,
     should_save = _merge_civitai_data(info_data, data_civitai) or should_save
 
   if 'sha256' not in info_data:
-    file_hash = _get_sha256_hash(file_path)
+    file_hash = await asyncio.to_thread(_get_sha256_hash, file_path)
     if file_hash is not None:
       info_data['sha256'] = file_hash
       should_save = True
@@ -333,7 +337,10 @@ async def get_model_info(file: str,
         url = first_img.get('url')
       
       if url and isinstance(url, str) and url.startswith('http') and network_available:
-        download_image(url=url, filename=file_name, directory=os.path.dirname(file_path))
+        await asyncio.to_thread(download_image,
+                                url=url,
+                                filename=file_name,
+                                directory=os.path.dirname(file_path))
 
   if should_save:
     if 'trainedWords' in info_data:
@@ -621,15 +628,29 @@ def get_folder_path(file: str, model_type="loras"):
   return file_path
 
 
+# 哈希缓存：key 为 (绝对路径, 大小, 修改时间)，文件未变化时直接复用，避免重复全量哈希
+_sha256_cache = {}
+
 def _get_sha256_hash(file_path: str):
   if not file_path or not path_exists(file_path):
     return None
+  cache_key = None
+  try:
+    stat = os.stat(file_path)
+    cache_key = (os.path.abspath(file_path), stat.st_size, stat.st_mtime)
+  except OSError:
+    pass
+  if cache_key is not None and cache_key in _sha256_cache:
+    return _sha256_cache[cache_key]
   file_hash = None
   sha256_hash = hashlib.sha256()
   with open(file_path, "rb") as f:
-    for byte_block in iter(lambda: f.read(4096), b""):
+    # 4MB 分块读取，比 4KB 快一个数量级
+    for byte_block in iter(lambda: f.read(4 * 1024 * 1024), b""):
       sha256_hash.update(byte_block)
     file_hash = sha256_hash.hexdigest()
+  if cache_key is not None:
+    _sha256_cache[cache_key] = file_hash
   return file_hash
 
 
@@ -719,7 +740,7 @@ async def delete_model_info(file: str,
     if os.path.isfile(try_info_path):
       os.remove(try_info_path)
   if del_civitai or del_metadata:
-    file_hash = _get_sha256_hash(file_path)
+    file_hash = await asyncio.to_thread(_get_sha256_hash, file_path)
     if del_civitai:
       json_file_path = _get_info_cache_file(file_hash, 'civitai')
       delete_userdata_file(json_file_path)

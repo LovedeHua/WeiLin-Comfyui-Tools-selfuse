@@ -113,7 +113,7 @@ def getModelList() -> dict:
 
     querystring = {"type": "text"}
 
-    response = requests.get(url, headers=headers, params=querystring)
+    response = requests.get(url, headers=headers, params=querystring, timeout=10)
 
     if response.status_code != 200:
         raise RuntimeError(

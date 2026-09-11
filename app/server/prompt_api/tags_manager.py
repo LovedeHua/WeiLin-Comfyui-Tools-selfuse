@@ -1,5 +1,6 @@
 import time
 from ..dao.dao import execute_query, fetch_all, fetch_one, tags_db_path
+from .sql_guard import validate_sql_statements
 import uuid
 import sqlite3
 from uuid_extensions import uuid7
@@ -45,6 +46,17 @@ async def move_tag(id_index, reference_id_index, position='before'):
     await execute_query('tags',query, (new_create_time, id_index))
 
     return {"info": "Tag moved"}
+
+async def move_tag_to_group(id_index, g_uuid):
+    """移动标签到指定分组：更新 g_uuid 并同步旧版 subgroup_id 字段"""
+    query = '''
+        UPDATE tag_tags
+        SET g_uuid = ?,
+            subgroup_id = (SELECT id_index FROM tag_subgroups WHERE g_uuid = ?)
+        WHERE id_index = ?
+    '''
+    await execute_query('tags', query, (g_uuid, g_uuid, id_index))
+    return {"info": "Tag moved to group"}
 
 
 async def move_group(id_index, reference_id_index, position='before'):
@@ -343,9 +355,16 @@ async def get_groups_list():
 
 
 def run_sql_text(sql_array):
+    # 安全校验：只允许对白名单业务表执行单条 INSERT/REPLACE，拒绝任意 SQL
+    ok, reason = validate_sql_statements(
+        sql_array, {'tag_groups', 'tag_subgroups', 'tag_tags'})
+    if not ok:
+        print("[WeiLin] 拒绝执行 SQL:", reason)
+        return {"code": 403, "message": "SQL 校验失败：%s" % reason}
+
     conn = sqlite3.connect(tags_db_path)
     cursor = conn.cursor()
-    
+
     try:
         # 开始事务
         cursor.execute('BEGIN')

@@ -2,6 +2,7 @@
   <Teleport to="#weilin_comfyui_tools_prompt_ui_div">
     <div
       class="weilin_prompt_ui_draggable-window"
+      :class="{ 'is-active-window': isActiveWindow }"
       :style="{
         left: `${currentPosition.x}px`,
         top: `${currentPosition.y}px`,
@@ -15,8 +16,16 @@
       @keydown="handleKeydown"
     >
       <!-- 窗口标题栏 -->
-      <div class="weilin_prompt_ui_window-header" @mousedown.stop="handleHeaderMouseDown" @dblclick="close">
+      <div class="weilin_prompt_ui_window-header" @mousedown.stop="handleHeaderMouseDown" @dblclick="close"
+        @contextmenu="handleHeaderContextMenu" title="右键 / 中键 / 双击 关闭窗口">
         <div class="weilin_prompt_ui_window-title">{{ title }}</div>
+        <button class="weilin_prompt_ui_pin-btn" :class="{ pinned: isPinned }" @click.stop="togglePin"
+          :title="isPinned ? t('controls.unpinWindow') : t('controls.pinWindow')">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H18v-2c-1.66 0-3-1.34-3-3z" />
+          </svg>
+        </button>
         <button class="weilin_prompt_ui_close-btn" @click="close">×</button>
       </div>
 
@@ -36,8 +45,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { windowManager } from '@/utils/windowManager'
 
 const props = defineProps({
   title: {
@@ -129,6 +139,14 @@ onMounted(() => {
   nextTick(() => {
     windowRef.value?.focus()
   })
+
+  // 自注册到窗口管理器（父组件重复注册是幂等的）
+  windowManager.registerWindow(props.name)
+})
+
+// 卸载时注销（父组件重复注销是幂等的）
+onUnmounted(() => {
+  windowManager.unregisterWindow(props.name)
 })
 
 // ESC 关闭（仅在聚焦时生效）
@@ -139,10 +157,41 @@ const handleKeydown = (e) => {
 }
 
 // 点击窗口：激活 + 聚焦 + 通知父组件置顶
-const handleWindowMouseDown = () => {
-  windowRef.value?.focus()
+const handleWindowMouseDown = (event) => {
+  // 智能焦点切换：点击窗口任意处即将该窗口提到最上层
+  windowManager.setActiveWindow(props.name)
+  // 点击输入框/文本域等可编辑元素时不抢焦点：
+  // 否则 windowRef.focus() 会让正在编辑的输入框 blur（如标签编辑会意外退出编辑状态）
+  const t = event && event.target
+  const isEditable = !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))
+  if (!isEditable) {
+    windowRef.value?.focus()
+  }
   emit('active')
 }
+
+// 鼠标悬停智能切换焦点功能已取消：焦点切换仅由点击窗口触发
+
+// 置顶与激活状态
+const isPinned = computed(() => windowManager.isPinned(props.name))
+const isActiveWindow = computed(() => windowManager.activeWindow.value === props.name)
+const togglePin = () => {
+  windowManager.togglePin(props.name)
+}
+
+// 程序性焦点交接：关闭窗口后自动交接 / Alt+Q 循环切换使本窗口成为激活窗口时，
+// 主动聚焦窗口容器，保证 ESC 关闭等键盘操作立即生效（原先只交接了 z-index，
+// DOM 键盘焦点仍留在已关闭窗口处，导致新激活窗口收不到 ESC）。
+// 若焦点已在本窗口的 iframe 内（用户刚点击其中内容/输入框），则不抢焦点，
+// 保留 handleWindowMouseDown 对可编辑元素的保护
+watch(isActiveWindow, (active) => {
+  if (!active) return
+  nextTick(() => {
+    const iframe = windowRef.value?.querySelector('iframe')
+    if (iframe && document.activeElement === iframe) return
+    windowRef.value?.focus()
+  })
+})
 
 // 拖动
 const isDragging = ref(false)
@@ -262,10 +311,26 @@ const close = () => {
   emit('close')
 }
 
-// 标题栏点击：先激活，再拖动
+// 标题栏点击：中键关闭窗口；左键先激活再拖动；其余按键忽略
 const handleHeaderMouseDown = (event) => {
+  // 鼠标中键（button === 1）关闭窗口，并阻止浏览器默认的中键自动滚动
+  // 注意：右键关闭不能在这里做——若在 mousedown 中关闭窗口，
+  // 随后的 contextmenu 事件会落在下层页面上弹出浏览器菜单，需在 contextmenu 事件中处理
+  if (event.button === 1) {
+    event.preventDefault()
+    close()
+    return
+  }
+  // 仅左键（button === 0）允许拖动
+  if (event.button !== 0) return
   handleWindowMouseDown()
   startDrag(event)
+}
+
+// 标题栏右键：阻止浏览器菜单并关闭窗口（菜单被抑制时窗口才卸载，顺序不能反）
+const handleHeaderContextMenu = (event) => {
+  event.preventDefault()
+  close()
 }
 </script>
 
@@ -275,7 +340,7 @@ const handleHeaderMouseDown = (event) => {
   background: var(--weilin-prompt-ui-primary-bg);
   border: 1px solid var(--weilin-prompt-ui-border-color);
   border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px 0 var(--weilin-prompt-ui-shadow-color);
   overflow: visible;
   display: flex;
   flex-direction: column;
@@ -291,6 +356,8 @@ const handleHeaderMouseDown = (event) => {
   cursor: move;
   user-select: none;
   border-radius: 8px 8px 0 0;
+  /* 标题栏与内容区背景色接近，用一条低调的半透明分隔线区分（两种主题下都自然） */
+  border-bottom: 1px solid var(--weilin-prompt-ui-border-color);
 }
 
 .weilin_prompt_ui_window-title {
@@ -314,7 +381,49 @@ const handleHeaderMouseDown = (event) => {
 }
 
 .weilin_prompt_ui_close-btn:hover {
-  color: #ff4d4f;
+  color: var(--weilin-prompt-ui-danger-color, #ff4d4f);
+}
+
+/* 置顶按钮 */
+.weilin_prompt_ui_pin-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0 2px;
+  color: var(--weilin-prompt-ui-secondary-text);
+  opacity: 0.45;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.weilin_prompt_ui_pin-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.weilin_prompt_ui_pin-btn:hover {
+  opacity: 1;
+}
+
+/* 已置顶：图钉倒转 + 高亮 */
+.weilin_prompt_ui_pin-btn.pinned {
+  opacity: 1;
+  color: var(--weilin-prompt-ui-primary-color);
+}
+
+.weilin_prompt_ui_pin-btn.pinned svg {
+  transform: rotate(45deg);
+}
+
+/* 焦点窗口：在标题栏处指示（仅标题文字变主色） */
+.weilin_prompt_ui_draggable-window.is-active-window .weilin_prompt_ui_window-title {
+  color: var(--weilin-prompt-ui-primary-color);
+}
+
+/* 鼠标指针智能切换：非激活窗口显示手型提示"悬停/点击可切换焦点" */
+.weilin_prompt_ui_draggable-window:not(.is-active-window) {
+  cursor: pointer;
 }
 
 .weilin_prompt_ui_window-content {

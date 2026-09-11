@@ -311,7 +311,7 @@ class AlibabaV2:
         if use_domain not in self.professional_field:
             raise AlibabaTranslateError
 
-        timeout = kwargs.get('timeout', None)
+        timeout = kwargs.get('timeout') or 10  # 默认 10 秒，避免外部接口挂起拖死请求
         proxies = kwargs.get('proxies', None)
         sleep_seconds = kwargs.get('sleep_seconds', 0)
         http_client = kwargs.get('http_client', 'requests')

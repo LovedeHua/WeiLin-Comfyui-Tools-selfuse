@@ -66,6 +66,32 @@
   --weilin-prompt-ui-btn-gradient-hover: #1762b6;
   --weilin-prompt-ui-btn-gradient-text: #fff;
 
+  /* ── 补全历史遗留的别名变量 ─────────────────────────────────
+     以下变量在组件中被大量引用但此前从未定义（查证：定义次数 0），
+     一直在走浏览器 fallback。此处给出与主变量等价的定义。 */
+  --weilin-prompt-ui-primary: var(--weilin-prompt-ui-primary-color);
+  --weilin-prompt-ui-primary-hover: var(--weilin-prompt-ui-primary-color-hover);
+  --weilin-prompt-ui-background: var(--weilin-prompt-ui-primary-bg);
+  --weilin-prompt-ui-background-secondary: var(--weilin-prompt-ui-secondary-bg);
+  --weilin-prompt-ui-input-background: var(--weilin-prompt-ui-input-bg);
+  --weilin-prompt-ui-border: var(--weilin-prompt-ui-border-color);
+  --weilin-prompt-ui-card-border: var(--weilin-prompt-ui-border-color);
+  --weilin-prompt-ui-label: var(--weilin-prompt-ui-primary-text);
+  --weilin-prompt-ui-secondary-color: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-secondary-color-hover: var(--weilin-prompt-ui-primary-text);
+  --weilin-prompt-ui-disabled-bg: var(--weilin-prompt-ui-secondary-bg);
+  --weilin-prompt-ui-disabled-text: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-disabled-color: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-cancel-color: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-tag-bg-hover: var(--weilin-prompt-ui-hover-bg-color);
+  --weilin-prompt-ui-warning-color-hover: var(--weilin-prompt-ui-warning-color);
+  --weilin-prompt-ui-danger-color-10: var(--weilin-prompt-ui-danger-color);
+  --weilin-prompt-ui-danger-color-fade: var(--weilin-prompt-ui-danger-color);
+  /* -fade / -10 用于 box-shadow 描边，需要带透明度的完整颜色值 */
+  --weilin-prompt-ui-primary-color-fade: rgba(24, 144, 255, 0.2);
+  --weilin-prompt-ui-primary-color-10: rgba(24, 144, 255, 0.1);
+  /* -rgb 用于 rgba(var(--rgb), 0.1)，必须是 "R, G, B" 裸数字 */
+  --weilin-prompt-ui-primary-color-rgb: 24, 144, 255;
 }
 
 #weilin_comfyui_tools_prompt_ui_div[data-theme="dark"] {
@@ -126,6 +152,29 @@
   --weilin-prompt-ui-btn-gradient: #144077;
   --weilin-prompt-ui-btn-gradient-hover: #1762b6;
   --weilin-prompt-ui-btn-gradient-text: #fff;
+
+  /* ── 补全历史遗留的别名变量（暗色版）─────────────────────── */
+  --weilin-prompt-ui-primary: var(--weilin-prompt-ui-primary-color);
+  --weilin-prompt-ui-primary-hover: var(--weilin-prompt-ui-primary-color-hover);
+  --weilin-prompt-ui-background: var(--weilin-prompt-ui-primary-bg);
+  --weilin-prompt-ui-background-secondary: var(--weilin-prompt-ui-secondary-bg);
+  --weilin-prompt-ui-input-background: var(--weilin-prompt-ui-input-bg);
+  --weilin-prompt-ui-border: var(--weilin-prompt-ui-border-color);
+  --weilin-prompt-ui-card-border: var(--weilin-prompt-ui-border-color);
+  --weilin-prompt-ui-label: var(--weilin-prompt-ui-primary-text);
+  --weilin-prompt-ui-secondary-color: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-secondary-color-hover: var(--weilin-prompt-ui-primary-text);
+  --weilin-prompt-ui-disabled-bg: var(--weilin-prompt-ui-secondary-bg);
+  --weilin-prompt-ui-disabled-text: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-disabled-color: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-cancel-color: var(--weilin-prompt-ui-secondary-text);
+  --weilin-prompt-ui-tag-bg-hover: var(--weilin-prompt-ui-hover-bg-color);
+  --weilin-prompt-ui-warning-color-hover: var(--weilin-prompt-ui-warning-color);
+  --weilin-prompt-ui-danger-color-10: var(--weilin-prompt-ui-danger-color);
+  --weilin-prompt-ui-danger-color-fade: var(--weilin-prompt-ui-danger-color);
+  --weilin-prompt-ui-primary-color-fade: rgba(64, 169, 255, 0.25);
+  --weilin-prompt-ui-primary-color-10: rgba(64, 169, 255, 0.12);
+  --weilin-prompt-ui-primary-color-rgb: 64, 169, 255;
 }
 
 /* 添加颜色选择器相关的全局样式 */

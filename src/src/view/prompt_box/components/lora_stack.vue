@@ -3,7 +3,16 @@
     :style="[{ width: isOpen ? '300px' : '0' }, { paddingRight: isOpen ? '16px' : '0' }]">
     <div :class="`${prefix}lora-content`">
       <div :class="`${prefix}lora-header`">
-        <h3 :class="`${prefix}lora-title`">{{ t('controls.loraStack') }}</h3>
+        <!-- 三段式启用切换：全部启用 / 默认 / 全部禁用，固定在最左侧。
+             "默认" = 恢复进入强制状态前各卡片的启用状态 -->
+        <div class="enable-segments" v-if="selectedLoras.length > 0">
+          <button class="segment" :class="{ active: enableMode === 'all' }"
+            @click="setEnableMode('all')">{{ t('loraManager.enableAllLora') }}</button>
+          <button class="segment" :class="{ active: enableMode === 'default' }"
+            @click="setEnableMode('default')">{{ t('loraManager.defaultMode') }}</button>
+          <button class="segment" :class="{ active: enableMode === 'none' }"
+            @click="setEnableMode('none')">{{ t('loraManager.disableAllLora') }}</button>
+        </div>
         <div class="header-actions">
           <button :class="`${prefix}add-btn`" @click="openLoraManager" :title="t('controls.addLora')">
             <svg viewBox="0 0 24 24" width="16" height="16">
@@ -56,11 +65,22 @@
               <div class="lora-weights-row">
                 <div class="weight-item-col">
                   <label>{{ t('loraManager.modelWeight') }}</label>
-                  <input type="number" v-model="lora.weight" class="lora-weight" step="0.1" />
+                  <input type="number" v-model="lora.weight" @input="onWeightInput(lora, 'weight')"
+                    @wheel="onWeightWheel($event, lora, 'weight')" class="lora-weight" step="0.1" />
                 </div>
                 <div class="weight-item-col">
                   <label>{{ t('loraManager.textEncoderWeight') }}</label>
-                  <input type="number" v-model="lora.text_encoder_weight" class="lora-weight" step="0.1" />
+                  <input type="number" v-model="lora.text_encoder_weight"
+                    @input="onWeightInput(lora, 'text_encoder_weight')"
+                    @wheel="onWeightWheel($event, lora, 'text_encoder_weight')" class="lora-weight" step="0.1" />
+                </div>
+                <!-- 权重同步：卡片级开关，开启后修改任一权重，另一个自动同步为相同值 -->
+                <div class="switch-item-col">
+                  <label>{{ t('loraManager.syncWeights') }}</label>
+                  <label class="switch">
+                    <input type="checkbox" v-model="lora.sync_weights" />
+                    <span class="slider"></span>
+                  </label>
                 </div>
                 <!-- Switch 开关 -->
                 <div class="switch-item-col">
@@ -88,6 +108,7 @@
 
 <script setup>
 import { ref, nextTick } from 'vue'
+import { isTrustedMessage } from '@/utils/post_message'
 import { useI18n } from 'vue-i18n'
 import loraDetail from '@/view/lora_manager/lora_detail.vue'
 import LoraCard from '@/view/lora_manager/lora_card.vue'
@@ -187,7 +208,55 @@ const toggleHideLora = (lora) => {
   // console.log('toggleHideLora', lora)
   lora.hidden = !lora.hidden;
   // emit('update:selectedLoras', props.selectedLoras);
+  // 手动干预单个卡片后退出三段强制模式（快照作废）
+  if (enableMode.value !== 'default') {
+    enableMode.value = 'default'
+    hiddenSnapshot = null
+  }
 };
+
+// 三段式启用模式：default=默认（不强制干预），all=全部启用，none=全部禁用。
+// 从默认进入强制状态时记录各卡片 hidden 快照，切回"默认"时恢复；
+// 强制状态间互切（启用↔禁用）不覆盖快照。直接修改 props 数组元素（与现有方法同一模式）
+const enableMode = ref('default')
+let hiddenSnapshot = null
+
+const setEnableMode = (mode) => {
+  if (mode === enableMode.value) return
+  if (mode === 'default') {
+    if (hiddenSnapshot) {
+      for (const [lora, hidden] of hiddenSnapshot) lora.hidden = hidden
+      hiddenSnapshot = null
+    }
+    enableMode.value = 'default'
+    return
+  }
+  if (enableMode.value === 'default') {
+    hiddenSnapshot = new Map(props.selectedLoras.map(l => [l, l.hidden]))
+  }
+  const target = mode === 'all' ? false : true
+  props.selectedLoras.forEach(l => { l.hidden = target })
+  enableMode.value = mode
+};
+
+// 权重同步：卡片级开关（lora.sync_weights），开启后修改该卡片的模型权重/文本权重时，
+// 另一个立即同步为相同值。字段随 selectedLoras 一起持久化，重开窗口后状态保留
+const onWeightInput = (lora, field) => {
+  if (!lora.sync_weights) return
+  const other = field === 'weight' ? 'text_encoder_weight' : 'weight'
+  lora[other] = lora[field]
+}
+
+// 悬停滚轮调权：无需点击聚焦，鼠标悬停在权重输入框上滚动即可调整（步长 0.1，与 step 属性一致）
+const onWeightWheel = (e, lora, field) => {
+  e.preventDefault() // 阻止滚轮滚动页面
+  const current = parseFloat(lora[field])
+  const base = Number.isFinite(current) ? current : 1
+  // 滚轮向上增、向下减；保留 1 位小数，避免 0.1 累加的浮点误差
+  const next = Math.round((base + (e.deltaY < 0 ? 0.1 : -0.1)) * 10) / 10
+  lora[field] = next
+  onWeightInput(lora, field) // 复用权重同步联动
+}
 
 
 // 添加Lora
@@ -246,6 +315,7 @@ const handleOpenDetailFromCard = (data) => {
 
 // 监听来自Lora管理器的消息
 window.addEventListener('message', (event) => {
+  if (!isTrustedMessage(event)) return
   if (event.data.type === 'weilin_prompt_ui_selectLora') {
     addLora(event.data.lora)
   }
@@ -337,19 +407,44 @@ defineExpose({
   gap: 8px;
 }
 
-.weilin_prompt_ui_lora-title {
-  margin: 0;
-  font-size: 16px;
-  color: var(--weilin-prompt-ui-primary-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .header-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* 三段式启用切换（全部启用 / 默认 / 全部禁用）：分段按钮组，固定在最左侧 */
+.enable-segments {
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+  border: 1px solid var(--weilin-prompt-ui-border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.enable-segments .segment {
+  border: none;
+  background: transparent;
+  color: var(--weilin-prompt-ui-secondary-text);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.enable-segments .segment + .segment {
+  border-left: 1px solid var(--weilin-prompt-ui-border-color);
+}
+
+.enable-segments .segment:hover {
+  background-color: var(--weilin-prompt-ui-hover-bg-color);
+}
+
+.enable-segments .segment.active {
+  background-color: var(--weilin-prompt-ui-primary-color);
+  color: #fff;
 }
 
 .weilin_prompt_ui_add-btn {
@@ -423,10 +518,11 @@ defineExpose({
   gap: 8px;
 }
 
-/* 输入框一行显示，label在上方 */
+/* 输入框一行显示，label在上方（卡片较窄，四列放不下时允许换行兜底） */
 .lora-weights-row {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 5px;
   align-items: flex-end;
   padding: 12px;

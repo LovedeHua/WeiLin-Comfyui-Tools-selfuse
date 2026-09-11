@@ -1,5 +1,5 @@
 <template>
-    <DraggableWindow v-if="isOpen" :title="t('lora.title')" :position="windows.loraDetail.position"
+    <DraggableWindow v-if="isOpen" name="loraDetail" :title="t('lora.title')" :position="windows.loraDetail.position"
         :size="windows.loraDetail.size" :z-index="windowManager.getZIndex('loraDetail')"
         @update:position="updatePosition('loraDetail', $event)" @update:size="updateSize('loraDetail', $event)"
         @active="windowManager.setActiveWindow('loraDetail')" @close="closeWindow('loraDetail')">

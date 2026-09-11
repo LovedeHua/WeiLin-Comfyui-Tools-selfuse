@@ -48,6 +48,7 @@
 }
 
 .tokens-container {
+    position: relative;
     display: flex;
     flex-flow: wrap;
     gap: 8px;
@@ -59,6 +60,163 @@
     transition: border-color 0.2s ease;
     margin-top: 10px;
     width: 100%;
+}
+
+/* 拖拽插入位置指示线（居中显示在标签之间的空隙里） */
+.drop-indicator {
+    position: absolute;
+    width: 4px;
+    border-radius: 2px;
+    background-color: var(--weilin-prompt-ui-primary-color, #1890ff);
+    box-shadow: 0 0 5px var(--weilin-prompt-ui-primary-color-fade, rgba(24, 144, 255, 0.65));
+    pointer-events: none;
+    z-index: 100;
+}
+
+/* 拖拽中的原标签（原位占位）：虚线轮廓与外框保持清晰，仅内容淡化。
+   不能用整体 opacity 淡化——那会连虚线框一起变淡，导致原位置难以辨认 */
+.token-item-box.weilin-dragging-src {
+    border: 1px solid var(--weilin-prompt-ui-primary-color, #1890ff) !important;
+    background-color: transparent !important;
+    box-shadow: none;
+}
+
+/* 只淡化内容，保留轮廓与外框清晰可见 */
+.token-item-box.weilin-dragging-src > * {
+    opacity: 0.3;
+}
+
+/* ============ 标签搜索栏（位于工具栏最左侧） ============ */
+.tag-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* 吸收工具栏左侧剩余空间，把搜索框钉在最左边（工具栏是 row-reverse 布局） */
+    margin-right: auto;
+    margin-left: 0;
+}
+
+.tag-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tag-search-input {
+    width: 220px;
+    height: 45px;
+    padding: 6px 10px;
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    border-radius: 8px;
+    background-color: var(--weilin-prompt-ui-input-bg);
+    color: var(--weilin-prompt-ui-primary-text);
+    font-size: 13px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.tag-search-input:focus {
+    border-color: #40a9ff;
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.15);
+}
+
+.tag-search-clear {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--weilin-prompt-ui-primary-text);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.tag-search-clear:hover {
+    background-color: rgba(255, 77, 79, 0.15);
+    color: #ff4d4f;
+}
+
+/* 补全建议下拉（fixed 定位，挂在外层工具栏内但按屏幕坐标显示，避免被 overflow 裁剪）
+   z-index 须高于顶部图标项 .action-item 的 9999 */
+.tag-search-suggestions {
+    position: fixed;
+    min-width: 180px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--weilin-prompt-ui-primary-bg);
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    z-index: 12000;
+}
+
+.tag-search-suggestion {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--weilin-prompt-ui-primary-text);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* 建议项主行：标签原文（过长省略，译文始终可见） */
+.tag-search-suggestion .suggestion-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 建议项副行：标签译文（次要色小字，不随原文省略） */
+.tag-search-suggestion .suggestion-translate {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--weilin-prompt-ui-secondary-text, #999);
+}
+
+.tag-search-suggestion:hover,
+.tag-search-suggestion.selected {
+    background-color: rgba(24, 144, 255, 0.12);
+    color: #1890ff;
+}
+
+/* 搜索命中高亮 / 非匹配淡出 */
+.token-search-hit {
+    outline: 2px solid #faad14;
+    box-shadow: 0 0 6px rgba(250, 173, 20, 0.5);
+}
+
+/* 禁用标签命中搜索：恢复全不透明（禁用态本身是 opacity .5 !important，
+   会把金色描边也一起淡化导致不突出），并加强描边；红框和斜线保留仍可辨认禁用态 */
+.token-item-box-disabled.token-search-hit {
+    opacity: 1 !important;
+    outline: 3px solid #faad14;
+    box-shadow: 0 0 8px rgba(250, 173, 20, 0.8);
+}
+
+.token-search-dim {
+    opacity: 0.3;
+}
+
+/* 跳转时的闪烁动画 */
+.token-search-flash {
+    animation: weilin-search-flash 0.3s ease 3;
+}
+
+@keyframes weilin-search-flash {
+    50% {
+        transform: scale(1.1);
+    }
 }
 
 .tokens-container:hover {
@@ -82,8 +240,9 @@
 
 .token-item input {
     width: auto;
-    min-width: 20px;
-    padding: 4px 8px;
+    min-width: 90px;
+    max-width: 360px;
+    padding: 5px 10px;
     border: 2px solid var(--weilin-prompt-ui-primary-color);
     border-radius: 4px;
     font-size: inherit;
@@ -251,7 +410,8 @@
     z-index: 1000;
     display: flex;
     gap: 4px;
-    transition: all 0.2s ease;
+    /* 只过渡颜色，位置必须即时生效（弹出位置先隐藏测量、修正后才显示，不能有位移动画） */
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .delete-btn {
@@ -321,6 +481,34 @@
 }
 
 .delete-btn:hover svg {
+    transform: scale(1.1);
+}
+
+/* 翻译单个TAG按钮 */
+.translate-tag-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.translate-tag-btn:hover {
+    background-color: rgba(24, 144, 255, 0.1);
+}
+
+.translate-tag-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: #1890ff;
+    transition: transform 0.2s ease;
+}
+
+.translate-tag-btn:hover svg {
     transform: scale(1.1);
 }
 
@@ -529,12 +717,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 6px 12px;
     cursor: pointer;
     user-select: none;
     transition: all 0.3s ease;
     background: var(--weilin-prompt-ui-secondary-bg);
     border-bottom: 1px solid var(--weilin-prompt-ui-border-color);
+}
+
+/* 标题图标缩小，降低标题行整体高度 */
+.tag-manager-header .tag-icon {
+    width: 18px;
+    height: 18px;
 }
 
 .tag-manager-header:hover {
@@ -639,65 +833,102 @@
 }
 
 /* 自动补全 */
-/* 自动补全容器 */
+/* 自动补全容器：外层只负责定位与外观，滚动交给内层 .autocomplete-scroll，
+   这样关闭按钮不随列表滚动而移出视野 */
 .autocomplete-container {
     position: absolute;
     z-index: 12000;
     width: 450px;
-    max-height: 350px;
-    overflow-y: auto;
-    background-color: var(--background-color);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    padding: 8px 0;
-    margin-top: 4px;
     background-color: var(--weilin-prompt-ui-primary-bg);
-    /* 添加最大宽度限制 */
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    border-radius: 8px;
+    box-shadow: 0 6px 16px var(--weilin-prompt-ui-shadow-color);
+    margin-top: 4px;
     max-width: calc(100% - 16px);
+    overflow: hidden; /* 让内层滚动区贴合圆角裁切 */
+    box-sizing: border-box;
 }
 
-/* 关闭按钮 */
+/* 内层滚动区：列表实际的滚动容器 */
+.autocomplete-scroll {
+    overflow-y: auto;
+    padding: 6px;
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: var(--weilin-prompt-ui-scrollbar-thumb) transparent;
+}
+
+.autocomplete-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.autocomplete-scroll::-webkit-scrollbar-thumb {
+    background: var(--weilin-prompt-ui-scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.autocomplete-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--weilin-prompt-ui-scrollbar-thumb-hover);
+}
+
+.autocomplete-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* 关闭按钮（位于滚动区外，滚动时固定在右上角）
+   圆角正方形；默认半透明深底低调不抢眼，hover 时才显红强化。
+   right 留出 8px 滚动条宽度 + 4px 间隙，避免遮盖滚动条 */
 .autocomplete-container .close-autocomplete-btn {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 24px;
-    height: 24px;
+    top: 4px;
+    right: 12px;
+    z-index: 3;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--weilin-prompt-ui-primary-bg);
-    border: 1px solid var(--weilin-prompt-ui-border-color);
-    border-radius: 50%;
-    color: var(--weilin-prompt-ui-primary-text);
+    background-color: rgba(0, 0, 0, 0.25);
+    border: none;
+    border-radius: 5px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .autocomplete-container .close-autocomplete-btn:hover {
     background-color: var(--weilin-prompt-ui-danger-color);
+    color: #fff;
 }
 
 /* 自动补全项 */
 .autocomplete-item {
     display: flex;
     flex-direction: row;
-    padding: 8px 12px;
+    padding: 8px 10px;
+    border-radius: 4px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    /* 不做背景色过渡：选中态切换必须即时，过渡会让旧项淡出形成残影 */
     align-items: center;
 }
 
-.autocomplete-item:hover {
-    color: var(--weilin-prompt-ui-primary-text);
-    background-color: var(--weilin-prompt-ui-hover-bg-color);
+/* 悬停与键盘选中统一为同一套高亮（主色背景 + 白字），避免出现两种选中观感 */
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+    color: #fff;
+    background-color: var(--weilin-prompt-ui-primary-color);
 }
 
-/* 选中项 */
-.autocomplete-item.selected {
-    color: var(--weilin-prompt-ui-primary-text);
-    background-color: var(--weilin-prompt-ui-primary-color);
+.autocomplete-item:hover .tag,
+.autocomplete-item.selected .tag {
+    color: #fff;
+}
+
+.autocomplete-item:hover .desc,
+.autocomplete-item.selected .desc {
+    color: rgba(255, 255, 255, 0.85);
 }
 
 /* 标签样式 */
@@ -706,27 +937,33 @@
     font-weight: 500;
     color: var(--weilin-prompt-ui-primary-text);
     font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* 描述样式 */
+/* 描述（译文）样式：次要色分层，与原文区分 */
 .desc {
     width: 35%;
     padding-left: 20px;
-    color: var(--weilin-prompt-ui-primary-text);
+    color: var(--weilin-prompt-ui-secondary-text);
     font-size: 14px;
     box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* 中间翻译区域 */
 .prompt-input-translate-area {
-    margin-top: 10px;
+    margin-top: 4px;
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
     white-space: nowrap;
     align-items: center;
     gap: 8px;
-    padding-bottom: 4px;
+    padding-bottom: 0;
     padding-left: 10px;
     scrollbar-width: thin; /* Firefox */
     flex-direction: row-reverse;
@@ -736,7 +973,7 @@
   height: 8px;
 }
 .prompt-input-translate-area::-webkit-scrollbar-thumb {
-  background: #e0e0e0;
+  background: var(--weilin-prompt-ui-scrollbar-thumb, #e0e0e0);
   border-radius: 4px;
 }
 .prompt-input-translate-area::-webkit-scrollbar-track {
@@ -748,8 +985,37 @@
   flex: 0 0 auto;
 }
 
+/* 中间功能按钮组：2 行 × 3 列网格排列
+   视觉顺序（order）：清空禁用→清空所有→删除按钮 / 随机Tag→设置随机Tag规则→翻译所有Tag
+   用 order 而非搬动 DOM，v-if 关闭任一按钮时其余按钮仍按此顺序自动补位 */
+.tool-buttons-grid {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    gap: 4px 8px; /* 行距（两行按钮间隙），列距 8px */
+    align-items: center;
+    justify-content: start;
+}
+
+.tool-buttons-grid .translate-btn {
+    margin-right: 0; /* 列间距由 gap 控制，清零按钮原有 margin */
+    height: 24px;    /* 两行布局收紧按钮高度（默认 32px） */
+    padding: 0 8px;
+}
+
+.tool-buttons-grid .translate-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.tool-buttons-grid .clear-disabled-btn { order: 1; }
+.tool-buttons-grid .clear-all-btn { order: 2; }
+.tool-buttons-grid .toggle-delete-btn { order: 3; }
+.tool-buttons-grid .random-tag-btn { order: 4; }
+.tool-buttons-grid .random-tag-settings-btn { order: 5; } /* 设置随机Tag规则 */
+.tool-buttons-grid .one-click-translate-btn { order: 6; } /* 翻译所有Tag */
+
 .prompt-input-translate-area-textarea {
-    width: 300px;
+    width: 400px;
     height: 45px;
     border: 1px solid var(--weilin-prompt-ui-border-color);
     background-color: var(--weilin-prompt-ui-input-bg);
@@ -789,8 +1055,12 @@
     color: var(--weilin-prompt-ui-primary-text);
 }
 
+/* 工具栏按钮统一单行样式，以标签管理"修改标签尺寸"按钮为基准：
+   32px 高、12px 字号、不换行、同款内边距与圆角 */
 .translate-btn {
-    padding: 7px 8px;
+    padding: 0 12px;
+    height: 32px;
+    box-sizing: border-box;
     margin-right: 4px;
     background: var(--weilin-prompt-ui-secondary-bg);
     border: 1px solid var(--weilin-prompt-ui-border-color);
@@ -800,6 +1070,31 @@
     transition: background 0.2s;
     display: flex;
     align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* 工具栏按钮紧凑化：图标 24→16，覆盖模板里写死的 svg 宽高 */
+.translate-btn .utils-item-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.translate-btn .token-item-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* 按钮文字单行显示 */
+.translate-btn .action-text {
+    margin-top: 0;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    text-align: left;
 }
 
 .translate-btn:hover {
@@ -1038,10 +1333,12 @@
   z-index: 2;
 }
 
-/* 框选高亮样式 */
+/* 框选高亮样式（零布局影响）：
+   border 保持基础 1px 只染色，第二层用 box-shadow 外环补齐视觉 2px 边框。
+   原写法 border: 2px 会让每个选中标签宽高各 +2px，多选时标签排版移位 */
 .token-item-box-selected {
-  border: 2px solid #4285f4 !important;
-  box-shadow: 0 0 8px #4285f455;
+  border-color: #4285f4 !important;
+  box-shadow: 0 0 0 1px #4285f4, 0 0 8px #4285f455;
   background-color: rgba(66, 133, 244, 0.08) !important;
   transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
   z-index: 2;
@@ -1054,14 +1351,14 @@
   white-space: nowrap;
   align-items: center;
   scrollbar-width: thin; /* Firefox */
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .center-container::-webkit-scrollbar {
   height: 8px;
 }
 .center-container::-webkit-scrollbar-thumb {
-  background: #e0e0e0;
+  background: var(--weilin-prompt-ui-scrollbar-thumb, #e0e0e0);
   border-radius: 4px;
 }
 .center-container::-webkit-scrollbar-track {
@@ -1087,8 +1384,8 @@
 }
 
 .line-token-btn:hover {
-  background: #e6f7ff5d;
-  box-shadow: 0 0 4px #4285f444;
+  background: var(--weilin-prompt-ui-primary-color-10, #e6f7ff5d);
+  box-shadow: 0 0 4px var(--weilin-prompt-ui-primary-color-fade, #4285f444);
 }
 
 .line-token-btn:active svg {
@@ -1108,7 +1405,7 @@
   vertical-align: middle;
 }
 .quick-delete-btn:hover {
-  background: #fff1f0;
+  background: var(--weilin-prompt-ui-danger-color-10, #fff1f0);
 }
 .quick-delete-btn svg {
   display: block;
@@ -1213,14 +1510,14 @@
 }
 
 .weilin-confirm-dialog-btn-confirm {
-  background-color: #ff4d4f;
+  background-color: var(--weilin-prompt-ui-danger-color, #ff4d4f);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+  box-shadow: 0 2px 8px var(--weilin-prompt-ui-danger-color-10, rgba(255, 77, 79, 0.3));
 }
 
 .weilin-confirm-dialog-btn-confirm:hover {
-  background-color: #ff7875;
-  box-shadow: 0 4px 12px rgba(255, 77, 79, 0.4);
+  background-color: var(--weilin-prompt-ui-danger-color-hover, #ff7875);
+  box-shadow: 0 4px 12px var(--weilin-prompt-ui-danger-color-fade, rgba(255, 77, 79, 0.4));
 }
 
 @keyframes weilin-fade-in {

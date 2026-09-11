@@ -1,6 +1,7 @@
 import aiosqlite
 from typing import List, Dict, Optional, Any
 from ..dao.dao import danbooru_db_path
+from .sql_guard import validate_sql_statements
 import sqlite3
 
 async def get_danbooru_tags(search: str = None, page: int = 1, page_size: int = 100) -> Dict[str, Any]:
@@ -155,9 +156,15 @@ async def delete_danbooru_tags_batch(tag_ids: List[int]) -> int:
             raise e
 
 def run_danbooru_sql_text(sql_array):
+    # 安全校验：只允许对 danbooru_tag 表执行单条 INSERT/REPLACE，拒绝任意 SQL
+    ok, reason = validate_sql_statements(sql_array, {'danbooru_tag'})
+    if not ok:
+        print("[WeiLin] 拒绝执行 SQL:", reason)
+        return {"code": 403, "message": "SQL 校验失败：%s" % reason}
+
     conn = sqlite3.connect(danbooru_db_path)
     cursor = conn.cursor()
-    
+
     try:
         # 开始事务
         cursor.execute('BEGIN')

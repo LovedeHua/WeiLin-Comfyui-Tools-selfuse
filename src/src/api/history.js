@@ -34,6 +34,28 @@ export const historyApi = {
         })
     },
 
+    clearHistory: async () => {
+        return await request({
+            url: '/prompt/history/clear_history',
+            method: 'post'
+        })
+    },
+
+    getHistoryLimit: async () => {
+        return await request({
+            url: '/get/setting/get_history_limit_setting',
+            method: 'post'
+        })
+    },
+
+    updateHistoryLimit: async (limit) => {
+        return await request({
+            url: '/update/setting/update_history_limit_setting',
+            method: 'post',
+            data: { limit }
+        })
+    },
+
     getFavorite:async () => {
         return await request({
             url: '/prompt/collect_history/get_collect_history',

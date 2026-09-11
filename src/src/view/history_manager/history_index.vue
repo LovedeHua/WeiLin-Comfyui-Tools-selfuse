@@ -22,6 +22,13 @@
                     @input="filterHistory" class="search-input" />
                 <input type="checkbox" v-if="isDeleteBatch" v-model="selectAllTags" :value="1" class="tag-checkbox"
                     @change="selectAllTagsChange" />
+                <button v-if="!isDeleteBatch" class="clear-all-btn" @click="clearAllHistory"
+                    :title="t('history.clear_all')">
+                    <svg viewBox="0 0 24 24" width="16" height="16" class="clear-all-icon">
+                        <path
+                            d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6l-1 1H2v2h12z" />
+                    </svg>
+                </button>
                 <button v-if="!isDeleteBatch" class="bulk-delete-btn" @click="bulkDelete"
                     :title="t('history.bulk_delete')">
                     <svg viewBox="0 0 1024 1024" width="16" height="16" class="delete-favorite-icon">
@@ -52,7 +59,9 @@
             </div>
             <ul class="history-list">
                 <li v-for="item in filteredHistory" :key="item.id_index" class="history-item">
-                    <span>{{ retPromptInfo(item.tag) }}</span>
+                    <div class="item-main">
+                        <span class="item-prompt">{{ retPromptInfo(item.tag) }}</span>
+                    </div>
                     <div class="action-buttons">
                         <button @click="addToFavorites(item)" class="favorite-btn"
                             :title="t('history.add_to_favorites')">
@@ -78,6 +87,7 @@
                         </button>
                         <input type="checkbox" v-if="isDeleteBatch" v-model="selectedTags" :value="item.id_index"
                             class="tag-checkbox" />
+                        <span class="item-time">{{ formatRelativeTime(item.create_time) }}</span>
                     </div>
                 </li>
             </ul>
@@ -256,9 +266,32 @@ const currentTag = ref({
 const isDeleteBatch = ref(false)
 const selectAllTags = ref(0)
 
+// 列表渲染缓存：同一 tag 的 JSON 解析只做一次（几千条历史时避免每次渲染重复 parse 卡顿）
+const promptInfoCache = new Map()
 const retPromptInfo = (strJson) => {
-    const jsonTemp = JSON.parse(strJson)
-    return jsonTemp.prompt
+    if (promptInfoCache.has(strJson)) return promptInfoCache.get(strJson)
+    let result
+    try {
+        result = JSON.parse(strJson).prompt
+    } catch (e) {
+        result = strJson // 旧数据/非 JSON 内容原样显示，避免解析失败白屏
+    }
+    promptInfoCache.set(strJson, result)
+    return result
+}
+
+// 相对时间显示：刚刚 / N分钟前 / N小时前 / 昨天 / N天前 / 超过一个月显示日期
+const formatRelativeTime = (unixSeconds) => {
+    if (!unixSeconds) return ''
+    const diff = Math.floor((Date.now() - unixSeconds * 1000) / 1000)
+    if (diff < 60) return t('history.time.justNow')
+    if (diff < 3600) return t('history.time.minutesAgo', { n: Math.floor(diff / 60) })
+    if (diff < 86400) return t('history.time.hoursAgo', { n: Math.floor(diff / 3600) })
+    const days = Math.floor(diff / 86400)
+    if (days === 1) return t('history.time.yesterday')
+    if (days < 30) return t('history.time.daysAgo', { n: days })
+    const d = new Date(unixSeconds * 1000)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // 改进的 RGBA 解析函数
@@ -351,6 +384,8 @@ const deleteConfirmMessage = computed(() => {
             return t('history.deleteHistoryConfirm', { name: itemToDelete.value.tag })
         case 'favorite':
             return t('history.deleteFavoriteConfirm', { name: itemToDelete.value.tag })
+        case 'clearHistory':
+            return t('history.confirmClearHistory')
         case 'deleteSelected':
             return t('history.confirmDeleteSelected')
         case 'deleteSelectedFavorite':
@@ -363,6 +398,12 @@ const deleteConfirmMessage = computed(() => {
 const deleteHistory = (history) => {
     deleteType.value = 'history'
     itemToDelete.value = history
+    showDeleteDialog.value = true
+}
+
+const clearAllHistory = () => {
+    deleteType.value = 'clearHistory'
+    itemToDelete.value = null
     showDeleteDialog.value = true
 }
 
@@ -421,6 +462,17 @@ const confirmDelete = async () => {
             case 'deleteSelected':
                 historyApi.
                     batchDeleteHistory(selectedTags.value)
+                    .then((res) => {
+                        fetchHistory()
+                        message({ type: "success", str: 'message.deleteSuccess' });
+                    })
+                    .catch((err) => {
+                        message({ type: "warn", str: 'message.networkError' });
+                    });
+                break
+            case 'clearHistory':
+                historyApi
+                    .clearHistory()
                     .then((res) => {
                         fetchHistory()
                         message({ type: "success", str: 'message.deleteSuccess' });
@@ -715,7 +767,7 @@ h1 {
 }
 
 .refresh-btn:hover {
-    background: var(--weilin-prompt-ui-hover-bg);
+    background: var(--weilin-prompt-ui-hover-bg-color);
     border-color: var(--weilin-prompt-ui-primary-color);
 }
 
@@ -765,7 +817,8 @@ h1 {
 }
 
 .add-his-btn,
-.bulk-delete-btn {
+.bulk-delete-btn,
+.clear-all-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -781,14 +834,34 @@ h1 {
 }
 
 .add-his-btn:hover,
-.bulk-delete-btn:hover {
-    background: var(--weilin-prompt-ui-hover-bg);
+.bulk-delete-btn:hover,
+.clear-all-btn:hover {
+    background: var(--weilin-prompt-ui-hover-bg-color);
     border-color: var(--weilin-prompt-ui-primary-color);
 }
 
 .add-icon,
-.bulk-delete-icon {
+.bulk-delete-icon,
+.clear-all-icon {
     fill: var(--weilin-prompt-ui-primary-text);
+}
+
+/* 历史条目主行：提示词内容（时间戳已移至底部按钮行右侧） */
+.item-main {
+    word-break: break-all;
+}
+
+.item-prompt {
+    min-width: 0;
+}
+
+.item-time {
+    margin-left: auto; /* 在底部按钮行内靠右对齐 */
+    align-self: center;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--weilin-prompt-ui-secondary-text, #999);
+    white-space: nowrap;
 }
 
 

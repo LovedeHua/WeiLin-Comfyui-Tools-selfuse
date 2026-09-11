@@ -136,6 +136,17 @@ export const tagsApi = {
         })
     },
 
+    // 移动标签到指定分组（拖拽换分组）
+    moveTagToGroup: async (data) => {
+        // 从 localStorage 获取保存的语言设置
+        const savedLocale = localStorage.getItem(`${STORAGE_PREFIX}userLocale`) || 'zh_CN'
+        return await request({
+            url: '/prompt/move_tag_to_group',
+            method: 'post',
+            data: {...data,lang:savedLocale}
+        })
+    },
+
     // 获取选择的标签列表
     getTagsGroupList: async () => {
         return await request({

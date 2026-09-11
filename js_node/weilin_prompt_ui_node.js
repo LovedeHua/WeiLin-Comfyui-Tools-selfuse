@@ -185,10 +185,170 @@ function initWindow() {
 }
 initWindow()
 
+// ===== 执行成功后的历史保存（工作流多节点各自入史） =====
+// 放在 execution_success 全局事件而非 onExecuted：
+// onExecuted 只在节点返回 {"ui":...} 时被触发（本插件仅 auto_random=true 时返回 ui），
+// 普通节点收不到 executed 消息；execution_success 在整次执行成功后必发，覆盖所有节点。
+// 注意：不做前端去重标记——若保存请求偶发失败/用户清空过历史，"乐观标记"会造成永久遗漏；
+// 重复保存由服务端内容级去重兜底（相同内容刷新置顶，不产生垃圾条目）。
+function collectHistoryTargetNodes(nodes, out, depth) {
+  if (!Array.isArray(nodes) || depth > 3) return
+  nodes.forEach((n) => {
+    if (!n || typeof n !== 'object') return
+    if (n.type === 'WeiLinPromptUI' || n.type === 'WeiLinPromptUIWithoutLora') {
+      // mute(2)/bypass(4) 的节点不参与本次执行，跳过（正常节点 mode=0）
+      if (n.mode === undefined || n.mode === 0) out.push(n)
+    }
+    // 子图：递归收集内部节点（属性不存在时静默跳过），防子图内节点遗漏
+    if (n.subgraph && Array.isArray(n.subgraph._nodes)) {
+      collectHistoryTargetNodes(n.subgraph._nodes, out, depth + 1)
+    }
+  })
+}
+
+function saveHistoryForExecutedNodes() {
+  try {
+    const graph = window.app && window.app.graph
+    if (!graph || !Array.isArray(graph._nodes)) return
+    const targets = []
+    collectHistoryTargetNodes(graph._nodes, targets, 0)
+    targets.forEach((n) => {
+      const positiveWidget = n.widgets && n.widgets.find(w => w.name === 'positive')
+      const text = positiveWidget ? getWidgetValue(positiveWidget, positiveWidget.element) : ''
+      if (!text || text.replace(/\s/g, '').length === 0) return
+      let loraVal = ''
+      if (n.type === 'WeiLinPromptUI') {
+        const loraWidget = n.widgets.find(w => w.name === 'lora_str')
+        const rawLora = loraWidget ? getWidgetValue(loraWidget, loraWidget.element) : ''
+        if (rawLora && rawLora.length > 0) {
+          try {
+            const parsedLora = JSON.parse(rawLora)
+            if (Array.isArray(parsedLora) && parsedLora.length > 0) loraVal = parsedLora
+          } catch (e) { /* lora_str 非法 JSON 时按无 lora 处理 */ }
+        }
+      }
+      // js_node 在主窗口运行，window.parent === 主窗口自身，App.vue 监听 message 可直接收到
+      window.parent.postMessage({
+        type: 'weilin_prompt_ui_node_executed_save_history',
+        prompt: text,
+        lora: loraVal
+      }, '*')
+    })
+  } catch (e) { /* 历史保存失败不影响执行 */ }
+}
+
+// 诊断入口：报告历史保存视角下每个提示词节点的状态（是否被处理/跳过原因）
+window.weilinHistoryDiag = function () {
+  const graph = window.app && window.app.graph
+  const rows = []
+  const walk = (nodes, depth) => {
+    if (!Array.isArray(nodes) || depth > 3) return
+    nodes.forEach((n) => {
+      if (!n || typeof n !== 'object') return
+      if (n.type === 'WeiLinPromptUI' || n.type === 'WeiLinPromptUIWithoutLora') {
+        const pw = n.widgets && n.widgets.find(w => w.name === 'positive')
+        const text = pw ? getWidgetValue(pw, pw.element) : ''
+        let reason = 'OK(会保存)'
+        if (n.mode !== undefined && n.mode !== 0) reason = 'SKIP(mode=' + n.mode + ' mute/bypass)'
+        else if (!text || text.replace(/\s/g, '').length === 0) reason = 'SKIP(空白内容)'
+        rows.push({
+          id: n.id, type: n.type, title: n.title || '',
+          mode: n.mode, promptLen: (text || '').length,
+          inSubgraph: depth > 0, status: reason
+        })
+      }
+      if (n.subgraph && Array.isArray(n.subgraph._nodes)) walk(n.subgraph._nodes, depth + 1)
+    })
+  }
+  if (graph && Array.isArray(graph._nodes)) walk(graph._nodes, 0)
+  console.table(rows)
+  console.log(' WeiLin history diag: ' + rows.length + ' prompt node(s) found. ' +
+    'status=OK 的节点在下次执行成功后都会各自保存历史。')
+  return rows
+}
+
+// ===== 提交工作流前的提示词格式转换（1-5 设置的兜底） =====
+// 节点 textarea 直接编辑的内容不经编辑器、没有任何格式转换（盲区），
+// 这里在 app.queuePrompt 提交前把所有提示词节点文本按 1-5 设置转换一遍，
+// 保证本次执行用的就是转换后的文本（转换发生在 graphToPrompt 之前）。
+// ①-④ 全角→半角对文件名无害，全文替换即可；
+// ⑤ 下划线会破坏 embedding:名字 / lora:名字 / <lora:...> <wlr:...> 语法里的名字，
+//   需先遮蔽特殊段，转换完再还原。
+function convertNodePromptText(text) {
+  try {
+    let s = text
+    if (localStorage.getItem('weilin_prompt_ui_comma_conversion') !== 'false') {
+      s = s.replace(/，/g, ',')
+    }
+    if (localStorage.getItem('weilin_prompt_ui_period_conversion') !== 'false') {
+      s = s.replace(/。/g, '.')
+    }
+    if (localStorage.getItem('weilin_prompt_ui_bracket_conversion') !== 'false') {
+      s = s.replace(/【/g, '[').replace(/】/g, ']').replace(/（/g, '(').replace(/）/g, ')')
+    }
+    if (localStorage.getItem('weilin_prompt_ui_angle_bracket_conversion') !== 'false') {
+      s = s.replace(/《/g, '<').replace(/》/g, '>')
+    }
+    if (localStorage.getItem('weilin_prompt_ui_underscore_to_bracket') === 'true') {
+      // 遮蔽特殊语法段：embedding:名字 / lora:名字 / <...> / Dynamic Prompts {a|b} 变体
+      // （DP 段可能含 wildcard 名字或变体下划线，转换会破坏引用）
+      const specials = []
+      let masked = s.replace(/(embedding:[^,\s]+|lora:[^,\s]+|<[^>]*>|\{[^{}]*\})/g, (m) => {
+        specials.push(m)
+        return '\u0000' + (specials.length - 1) + '\u0000'
+      })
+      masked = masked.replace(/_/g, ' ')
+      s = masked.replace(/\u0000(\d+)\u0000/g, (_, i) => specials[Number(i)])
+    }
+    return s
+  } catch (e) {
+    return text // 转换失败按原文本提交
+  }
+}
+
+function convertAllNodePrompts() {
+  try {
+    const graph = window.app && window.app.graph
+    if (!graph || !Array.isArray(graph._nodes)) return
+    // 复用历史保存的节点收集器（同类型、同 mode 过滤、含子图递归）
+    const targets = []
+    collectHistoryTargetNodes(graph._nodes, targets, 0)
+    targets.forEach((n) => {
+      const positiveWidget = n.widgets && n.widgets.find(w => w.name === 'positive')
+      if (!positiveWidget) return
+      const raw = getWidgetValue(positiveWidget, positiveWidget.element)
+      if (!raw) return
+      const converted = convertNodePromptText(raw)
+      if (converted !== raw) {
+        // setWidgetValue 同步 widget/DOM 并派发事件，节点列表面板会跟着刷新
+        setWidgetValue(positiveWidget, converted)
+      }
+    })
+  } catch (e) { /* 转换失败不阻塞提交 */ }
+}
+
 app.registerExtension({
   name: "weilin.prompt_ui_node",
   async init() {},
-  async setup() {},
+  async setup(app) {
+    // 整次工作流执行成功：遍历所有提示词节点保存历史
+    try {
+      if (app.api && typeof app.api.addEventListener === 'function') {
+        app.api.addEventListener('execution_success', saveHistoryForExecutedNodes)
+      }
+    } catch (e) { /* 事件不可用时静默 */ }
+
+    // 提交队列前做一次格式转换（点生成/快捷键队列都走 app.queuePrompt）
+    try {
+      if (typeof app.queuePrompt === 'function') {
+        const origQueuePrompt = app.queuePrompt.bind(app)
+        app.queuePrompt = function (...args) {
+          convertAllNodePrompts()
+          return origQueuePrompt(...args)
+        }
+      }
+    } catch (e) { /* 静默 */ }
+  },
   async beforeRegisterNodeDef(nodeType, nodeData, app) {
     // console.log(app)
     if (
@@ -210,6 +370,10 @@ app.registerExtension({
           hideWidgetForGood(this, this.widgets.find(w => w.name === "temp_str"))
           hideWidgetForGood(this, this.widgets.find(w => w.name === "random_template"))
         }
+
+        // 屏蔽 auto_random：开启设置后隐藏该控件并强制为 false（清掉旧工作流里的残留 true）
+        applyAutoRandomBlock(this)
+
         if (nodeData.name === "WeiLinPromptUI" || nodeData.name === "WeiLinPromptUIOnlyLoraStack") {
           hideWidgetForGood(this, this.widgets.find(w => w.name === "lora_str"))
           hideWidgetForGood(this, this.widgets.find(w => w.name === "temp_lora_str"))
@@ -546,12 +710,67 @@ app.registerExtension({
         if (positiveWidget && message.positive) {
           setWidgetValue(positiveWidget, message.positive);
         }
+        // 注意：历史保存不放这里——onExecuted 只在节点返回 {"ui":...} 时被触发
+        // （本插件仅 auto_random=true 时才返回 ui），普通节点收不到 executed 消息。
+        // 历史保存统一走 execution_success 全局事件，见 setup() 中的监听。
         // console.log(message.positive)
 			};
+
+      // 从已保存的工作流加载节点时（widget 值由 workflow 写入），再次执行屏蔽
+      const onConfigure = nodeType.prototype.onConfigure;
+      nodeType.prototype.onConfigure = function () {
+        const r2 = onConfigure ? onConfigure.apply(this, arguments) : undefined;
+        applyAutoRandomBlock(this);
+        return r2;
+      };
     }
   },
 });
 
+
+// ===== auto_random 屏蔽开关 =====
+// localStorage 键：weilin_function_toggles_disableAutoRandom（'true' 表示屏蔽）
+// 屏蔽时：隐藏 auto_random 控件 + 强制其值为 false，并禁止后续被改回 true
+const AUTO_RANDOM_DISABLE_KEY = 'weilin_function_toggles_disableAutoRandom';
+
+function isAutoRandomDisabled() {
+  try {
+    return localStorage.getItem(AUTO_RANDOM_DISABLE_KEY) === 'true';
+  } catch (e) {
+    return false;
+  }
+}
+
+function applyAutoRandomBlock(node) {
+  const widget = node.widgets && node.widgets.find(w => w.name === 'auto_random');
+  if (!widget) return;
+  if (isAutoRandomDisabled()) {
+    // 强制关闭，清掉旧工作流里残留的 true
+    widget.value = false;
+    if (widget.element && widget.element.type === 'checkbox') {
+      widget.element.checked = false;
+    }
+    if (widget.origType === 'hidden' || widget.type === 'hidden') return; // 已隐藏，避免重复处理
+    hideWidgetForGood(node, widget);
+  }
+}
+
+// 供页面（prompt_ui iframe 内的设置项）通过 postMessage 通知刷新
+window.addEventListener('message', (event) => {
+  const data = event && event.data;
+  if (!data || data.type !== 'weilin_prompt_ui_auto_random_toggle') return;
+  try {
+    const graph = window.app && window.app.graph;
+    const nodes = (graph && graph._nodes) || [];
+    nodes.forEach((n) => {
+      if (n.type === 'WeiLinPromptUI' || n.type === 'WeiLinPromptUIWithoutLora' ||
+        n.type === 'WeiLinPromptUIOnlyLoraStack') {
+        applyAutoRandomBlock(n);
+        if (n.setDirtyCanvas) n.setDirtyCanvas(true, true);
+      }
+    });
+  } catch (e) { /* 忽略 */ }
+});
 
 //from melmass
 // https://github.com/kijai/ComfyUI-KJNodes/blob/main/web/js/spline_editor.js

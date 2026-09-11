@@ -3,41 +3,41 @@
     <!-- 提示词窗口 -->
     <DraggableWindow name="promptBox" v-if="windows.prompt.visible"
       :title="promptManager === 'prompt' ? t('promptBox.windowTitle') : t('promptBox.windowTitleGlobal')"
-      :position="windows.prompt.position" :size="windows.prompt.size" :z-index="windowManager.getZIndex('prompt')"
+      :position="windows.prompt.position" :size="windows.prompt.size" :z-index="windowManager.getZIndex('promptBox')"
       @update:position="updatePosition('prompt', $event)" @update:size="updateSize('prompt', $event)"
-      @active="windowManager.setActiveWindow('prompt')" @close="closeWindow('prompt')">
+      @active="windowManager.setActiveWindow('promptBox')" @close="closeWindow('prompt')">
       <PromptBox :promptManager="promptManager" :hasPromptLoraStack="hasPromptLoraStack" ref="promptBoxRef" />
     </DraggableWindow>
 
     <!-- Tag管理窗口 -->
     <DraggableWindow name="tagManager" v-if="windows.tag.visible" :title="t('tagManager.windowTitle')"
-      :position="windows.tag.position" :size="windows.tag.size" :z-index="windowManager.getZIndex('tag')"
+      :position="windows.tag.position" :size="windows.tag.size" :z-index="windowManager.getZIndex('tagManager')"
       @update:position="updatePosition('tag', $event)" @update:size="updateSize('tag', $event)"
-      @active="windowManager.setActiveWindow('tag')" @close="closeWindow('tag')">
+      @active="windowManager.setActiveWindow('tagManager')" @close="closeWindow('tag')">
       <TagManager :tagManager="tagManager" />
     </DraggableWindow>
 
     <!-- Lora管理窗口 -->
     <DraggableWindow name="loraManager" v-if="windows.lora.visible" :title="t('loraManager.windowTitle')"
-      :position="windows.lora.position" :size="windows.lora.size" :z-index="windowManager.getZIndex('lora')"
+      :position="windows.lora.position" :size="windows.lora.size" :z-index="windowManager.getZIndex('loraManager')"
       @update:position="updatePosition('lora', $event)" @update:size="updateSize('lora', $event)"
-      @active="windowManager.setActiveWindow('lora')" @close="closeWindow('lora')">
+      @active="windowManager.setActiveWindow('loraManager')" @close="closeWindow('lora')">
       <LoraManager :loraManager="loraManager" ref="loraManagerRef" />
     </DraggableWindow>
 
     <!-- 历史记录窗口  -->
     <DraggableWindow name="historyManager" v-if="windows.history.visible" :title="t('history.windowTitle')"
-      :position="windows.history.position" :size="windows.history.size" :z-index="windowManager.getZIndex('history')"
+      :position="windows.history.position" :size="windows.history.size" :z-index="windowManager.getZIndex('historyManager')"
       @update:position="updatePosition('history', $event)" @update:size="updateSize('history', $event)"
-      @active="windowManager.setActiveWindow('history')" @close="closeWindow('history')">
+      @active="windowManager.setActiveWindow('historyManager')" @close="closeWindow('history')">
       <HistoryManager />
     </DraggableWindow>
 
     <!-- AI窗口 -->
     <DraggableWindow name="aiWindow" v-if="windows.ai_window.visible" :title="t('aiWindow.windowTitle')"
       :position="windows.ai_window.position" :size="windows.ai_window.size"
-      :z-index="windowManager.getZIndex('ai_window')" @update:position="updatePosition('ai_window', $event)"
-      @update:size="updateSize('ai_window', $event)" @active="windowManager.setActiveWindow('ai_window')"
+      :z-index="windowManager.getZIndex('aiWindow')" @update:position="updatePosition('ai_window', $event)"
+      @update:size="updateSize('ai_window', $event)" @active="windowManager.setActiveWindow('aiWindow')"
       @close="closeWindow('ai_window')">
       <AiWindow />
     </DraggableWindow>
@@ -45,9 +45,9 @@
     <!-- 节点列表快捷窗口 -->
     <DraggableWindow name="nodeListWindow" v-if="windows.node_list_window.visible"
       :title="t('nodeListWindow.windowTitle')" :position="windows.node_list_window.position"
-      :size="windows.node_list_window.size" :z-index="windowManager.getZIndex('node_list_window')"
+      :size="windows.node_list_window.size" :z-index="windowManager.getZIndex('nodeListWindow')"
       @update:position="updatePosition('node_list_window', $event)"
-      @update:size="updateSize('node_list_window', $event)" @active="windowManager.setActiveWindow('node_list_window')"
+      @update:size="updateSize('node_list_window', $event)" @active="windowManager.setActiveWindow('nodeListWindow')"
       @close="closeWindow('node_list_window')">
       <NodeListWindow />
     </DraggableWindow>
@@ -55,8 +55,8 @@
     <!-- 云仓库窗口 -->
     <DraggableWindow name="cloudWindow" v-if="windows.cloud_window.visible" :title="t('cloudWindow.windowTitle')"
       :position="windows.cloud_window.position" :size="windows.cloud_window.size"
-      :z-index="windowManager.getZIndex('cloud_window')" @update:position="updatePosition('cloud_window', $event)"
-      @update:size="updateSize('cloud_window', $event)" @active="windowManager.setActiveWindow('cloud_window')"
+      :z-index="windowManager.getZIndex('cloudWindow')" @update:position="updatePosition('cloud_window', $event)"
+      @update:size="updateSize('cloud_window', $event)" @active="windowManager.setActiveWindow('cloudWindow')"
       @close="closeWindow('cloud_window')">
       <CloudWindow />
     </DraggableWindow>
@@ -64,20 +64,20 @@
     <!-- Lora堆窗口 -->
     <DraggableWindow name="loraStackWindow" v-if="windows.lora_stack_window.visible" :title="t('controls.loraStack')"
       :position="windows.lora_stack_window.position" :size="windows.lora_stack_window.size"
-      :z-index="windowManager.getZIndex('lora_stack_window')"
+      :z-index="windowManager.getZIndex('loraStackWindow')"
       @update:position="updatePosition('lora_stack_window', $event)"
       @update:size="updateSize('lora_stack_window', $event)"
-      @active="windowManager.setActiveWindow('lora_stack_window')" @close="closeWindow('lora_stack_window')">
+      @active="windowManager.setActiveWindow('loraStackWindow')" @close="closeWindow('lora_stack_window')">
       <LoraStackWindow ref="loraStackRef" />
     </DraggableWindow>
 
     <!-- Danbooru管理器窗口 -->
     <DraggableWindow name="DanbooruManagerWindow" v-if="windows.danbooru_manager_window.visible"
       :title="t('controls.danbooruManager')" :position="windows.danbooru_manager_window.position"
-      :size="windows.danbooru_manager_window.size" :z-index="windowManager.getZIndex('danbooru_manager_window')"
+      :size="windows.danbooru_manager_window.size" :z-index="windowManager.getZIndex('DanbooruManagerWindow')"
       @update:position="updatePosition('danbooru_manager_window', $event)"
       @update:size="updateSize('danbooru_manager_window', $event)"
-      @active="windowManager.setActiveWindow('danbooru_manager_window')"
+      @active="windowManager.setActiveWindow('DanbooruManagerWindow')"
       @close="closeWindow('danbooru_manager_window')">
       <DanbooruManagerWindow ref="danbooruManagerRef" />
     </DraggableWindow>
@@ -103,6 +103,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { isTrustedMessage } from '@/utils/post_message'
 import { useI18n } from 'vue-i18n'
 import DraggableWindow from '@/components/DraggableWindow.vue'
 import PromptBox from './view/prompt_box/prompt_index.vue'
@@ -119,8 +120,10 @@ import LoraStackWindow from '@/view/lora_manager/lora_stack.vue'
 import DanbooruManagerWindow from '@/view/danbooru/danbooru_manager.vue'
 import { translatorApi } from '@/api/translator'
 import { tagsApi } from '@/api/tags'
+import { historyApi } from '@/api/history'
 import loraDetail from '@/view/lora_manager/lora_detail.vue'
 import { version as localVersion } from './utils/version'
+import { detectDark, watchComfyTheme, applyComfyPalette, clearComfyPalette } from './utils/comfyTheme'
 
 const tagStore = useTagStore();
 
@@ -139,8 +142,37 @@ const tagManager = ref('manager')
 const promptManager = ref('prompt_global')
 const hasPromptLoraStack = ref(false)
 const THEME_KEY = `${STORAGE_PREFIX}theme`
-// 获取主题设置
-const isDark = ref(localStorage.getItem(THEME_KEY) === 'dark')
+// 主题模式（三态）：
+//   'follow' —— 跟随 ComfyUI（默认，写容器 data-theme + 映射 ComfyUI 真实配色变量）
+//   'dark'   —— 强制暗色（只写 data-theme，用插件自带暗色预设）
+//   'light'  —— 强制亮色（同上）
+// 兼容旧键 weilin_tools_theme_manual / weilin_tools_theme（曾用于二元开关）
+const THEME_MODE_KEY = `${STORAGE_PREFIX}theme_mode`
+const THEME_MANUAL_KEY = `${STORAGE_PREFIX}theme_manual`
+const LEGACY_THEME_KEY = THEME_KEY
+
+const readThemeMode = () => {
+  try {
+    const m = localStorage.getItem(THEME_MODE_KEY)
+    if (m === 'follow' || m === 'dark' || m === 'light') return m
+    // 兼容旧数据：旧 manual=true 时按旧 theme 值取强制档，否则跟随
+    if (localStorage.getItem(THEME_MANUAL_KEY) === 'true') {
+      return localStorage.getItem(LEGACY_THEME_KEY) === 'light' ? 'light' : 'dark'
+    }
+  } catch (e) {
+    // 忽略
+  }
+  return 'follow'
+}
+
+const themeMode = ref(readThemeMode())
+// 是否跟随 ComfyUI（非手动强制档）
+const isManualTheme = ref(themeMode.value !== 'follow')
+const isDark = ref(
+  themeMode.value === 'follow' ? detectDark() : themeMode.value === 'dark'
+)
+// 取消 ComfyUI 主题监听的句柄
+let stopComfyThemeWatch = null
 // 全局提示词
 const globalPrompt = ref('')
 
@@ -274,14 +306,13 @@ watch(windows, (newState) => {
   }
 }, { deep: true })
 
-// 组件挂载时注册所有窗口
+// 组件挂载
 onMounted(() => {
-  Object.keys(windows.value).forEach(windowName => {
-    // console.log(windowName)
-    windowManager.registerWindow(windowName)
-  })
+  // 窗口注册已由 DraggableWindow 挂载时以 props.name 自行完成
+  // （这里不能用 windows 状态 key 注册——它与窗口 name 不同，会产生幽灵栈条目导致焦点切换失效）
 
   initTheme()
+  startComfyThemeWatch()
   // 添加消息监听
   window.addEventListener('message', handleMessage)
 
@@ -292,31 +323,361 @@ onMounted(() => {
 
 })
 
-// 初始化主题
-const initTheme = () => {
-  let savedTheme = localStorage.getItem(THEME_KEY)
-  if (!savedTheme) {
-    localStorage.setItem(THEME_KEY, 'dark')
-    savedTheme = 'dark'
-    isDark.value = true
+// ── 强制档（dark/light）下的调色板跟随 ──────────────────────────────
+// 语义：data-theme 由用户档位强制决定（保证亮/暗观感），但**颜色**仍跟 ComfyUI 调色板。
+// 做法：先走一遍映射，再用与档位同侧的预设覆盖关键项，
+// 避免"强制亮却拿到 ComfyUI 暗色的文字/背景"。
+const OVERRIDE_KEYS = [
+  '--weilin-prompt-ui-primary-bg',
+  '--weilin-prompt-ui-secondary-bg',
+  '--weilin-prompt-ui-primary-text',
+  '--weilin-prompt-ui-secondary-text',
+  '--weilin-prompt-ui-input-bg',
+  '--weilin-prompt-ui-input-text',
+  '--weilin-prompt-ui-title-color',
+  '--weilin-prompt-ui-label-color',
+  '--weilin-prompt-ui-border-color',
+  '--weilin-prompt-ui-header-bg',
+  '--weilin-prompt-ui-card-bg',
+  '--weilin-prompt-ui-button-bg',
+  '--weilin-prompt-ui-button-text',
+  '--weilin-prompt-ui-tag-bg',
+  '--weilin-prompt-ui-tag-text',
+  '--weilin-prompt-ui-token-bg',
+  '--weilin-prompt-ui-icon-color',
+  '--weilin-prompt-ui-primary',
+  '--weilin-prompt-ui-background',
+  '--weilin-prompt-ui-input-background',
+  '--weilin-prompt-ui-border',
+  '--weilin-prompt-ui-card-border',
+  '--weilin-prompt-ui-label',
+  '--weilin-prompt-ui-secondary-color'
+]
+
+// 与 theme.css 中 light / dark 预设一致的兜底色
+const PRESET_FALLBACK = {
+  light: {
+    '--weilin-prompt-ui-primary-bg': '#ffffff',
+    '--weilin-prompt-ui-secondary-bg': '#f5f5f5',
+    '--weilin-prompt-ui-primary-text': '#333333',
+    '--weilin-prompt-ui-secondary-text': '#666666',
+    '--weilin-prompt-ui-input-bg': '#ffffff',
+    '--weilin-prompt-ui-input-text': '#333333',
+    '--weilin-prompt-ui-border-color': '#e8e8e8',
+    '--weilin-prompt-ui-icon-color': '#666666',
+    '--weilin-prompt-ui-token-bg': '#f0f0f0',
+    '--weilin-prompt-ui-header-bg': '#f5f5f5',
+    '--weilin-prompt-ui-card-bg': '#f4f7fd',
+    '--weilin-prompt-ui-tag-bg': '#f5f5f5',
+    '--weilin-prompt-ui-tag-text': '#333333',
+    '--weilin-prompt-ui-button-bg': '#ffffff',
+    '--weilin-prompt-ui-button-text': '#333333'
+  },
+  dark: {
+    '--weilin-prompt-ui-primary-bg': '#1a1a1a',
+    '--weilin-prompt-ui-secondary-bg': '#2d2d2d',
+    '--weilin-prompt-ui-primary-text': '#e0e0e0',
+    '--weilin-prompt-ui-secondary-text': '#a0a0a0',
+    '--weilin-prompt-ui-input-bg': '#2d2d2d',
+    '--weilin-prompt-ui-input-text': '#e0e0e0',
+    '--weilin-prompt-ui-border-color': '#404040',
+    '--weilin-prompt-ui-icon-color': '#a0a0a0',
+    '--weilin-prompt-ui-token-bg': '#404040',
+    '--weilin-prompt-ui-header-bg': '#2d2d2d',
+    '--weilin-prompt-ui-card-bg': '#23243a',
+    '--weilin-prompt-ui-tag-bg': '#2d2d2d',
+    '--weilin-prompt-ui-tag-text': '#e0e0e0',
+    '--weilin-prompt-ui-button-bg': '#2d2d2d',
+    '--weilin-prompt-ui-button-text': '#e0e0e0'
   }
-  isDark.value = savedTheme === 'dark'
-  // 初始化主题
+}
+
+// 用某一侧的预设覆盖容器上的关键变量（覆盖跟随映射可能带来的异侧颜色）
+const enforceSidePreset = (container, dark) => {
+  if (!container) return
+  const table = dark ? PRESET_FALLBACK.dark : PRESET_FALLBACK.light
+  for (const key of OVERRIDE_KEYS) {
+    const v = table[key]
+    if (!v) continue
+    try {
+      container.style.setProperty(key, v)
+    } catch (e) {
+      // 忽略
+    }
+  }
+}
+
+
+// 把当前主题写到插件容器上（CSS 变量按 data-theme 生效）
+// followComfy 为 true 时，额外把 ComfyUI 的真实主题变量映射到 --weilin-* 变量，
+// 这样 Nord / Solarized / 自定义调色板等"非深浅"主题的配色也能跟随。
+//
+// darkOverride：显式指定本次渲染用亮/暗。ComfyUI 主题往往"慢一拍"——切换调色板时
+// 插件先于 <html> 的 .dark-theme 类生效被通知，若此时读 isDark.value 会拿到旧值，
+// 于是整套 UI（尤其跟随档下的深/浅预设）会与 ComfyUI 反色。因此跟随链路统一
+// 以「刚从 DOM 探测到的 dark」为准，而不是 ref 的滞后值。
+const applyTheme = (followComfy = false, darkOverride = undefined) => {
   const container = document.getElementById('weilin_comfyui_tools_prompt_ui_div')
-  if (container) {
-    // console.log(isDark.value)
-    container.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
+  if (!container) return
+  const dark = typeof darkOverride === 'boolean' ? darkOverride : isDark.value
+  container.setAttribute('data-theme', dark ? 'dark' : 'light')
+  let mapped = 0
+  if (followComfy) {
+    mapped = applyComfyPalette(container, dark)
+  } else {
+    // 强制档：清掉跟随期的覆盖，回到插件自身的 light/dark 预设
+    clearComfyPalette(container)
+    enforceSidePreset(container, dark)
   }
+  if (typeof window !== 'undefined') {
+    window.__weilinThemeState = {
+      mode: themeMode.value,
+      follow: followComfy,
+      dark,
+      mapped
+    }
+  }
+}
+
+// 初始化主题：默认跟随 ComfyUI；处于强制档时用强制值
+const initTheme = () => {
+  if (themeMode.value === 'follow') {
+    const dark = detectDark()
+    isDark.value = dark
+    applyTheme(true, dark)
+  } else {
+    const dark = themeMode.value === 'dark'
+    isDark.value = dark
+    applyTheme(false, dark)
+  }
+}
+
+// 切换主题档位（三态：follow → dark → light → follow）
+// darkOnly=true 时兼容旧调用（传布尔），等价于在 dark / light 间切换
+const setThemeMode = (mode) => {
+  if (mode !== 'follow' && mode !== 'dark' && mode !== 'light') return
+  themeMode.value = mode
+  isManualTheme.value = mode !== 'follow'
+  try {
+    localStorage.setItem(THEME_MODE_KEY, mode)
+    // 同步写旧键，保持向后兼容（外部脚本/旧版本回退时仍能读到）
+    localStorage.setItem(THEME_MANUAL_KEY, mode === 'follow' ? 'false' : 'true')
+    localStorage.setItem(LEGACY_THEME_KEY, mode === 'light' ? 'light' : 'dark')
+  } catch (e) {
+    // 忽略
+  }
+  initTheme()
+  // 通知 ThemeSwitch 等订阅者：档位已变（用于同步图标）
+  try {
+    window.dispatchEvent(new CustomEvent('weilin-theme-mode-change', { detail: { mode } }))
+  } catch (e) {
+    // 忽略
+  }
+}
+
+// 兼容旧签名：weilinSetThemeManually(dark) → 强制 dark/light
+const setThemeManually = (dark) => setThemeMode(dark ? 'dark' : 'light')
+
+// 显式恢复跟随
+const resetThemeToComfy = () => setThemeMode('follow')
+
+// 让 ThemeSwitch 组件（或外部脚本）能调用到主题控制
+if (typeof window !== 'undefined') {
+  window.weilinSetThemeManually = setThemeManually
+  window.weilinSetThemeMode = setThemeMode
+  window.weilinResetThemeToComfy = resetThemeToComfy
+  window.weilinGetThemeMode = () => themeMode.value
+  // 供 ThemeSwitch 兜底路径使用：把某一侧的预设压到容器上
+  window.weilinApplySidePreset = (dark) => {
+    const container = document.getElementById('weilin_comfyui_tools_prompt_ui_div')
+    if (container) enforceSidePreset(container, !!dark)
+  }
+  // 诊断：在控制台执行 weilinThemeDiag() 可查看跟随链路的完整状态
+  window.weilinThemeDiag = () => {
+    const container = document.getElementById('weilin_comfyui_tools_prompt_ui_div')
+    const root = document.documentElement
+    const cs = container ? getComputedStyle(container) : null
+    const newVars = [
+      '--base-background',
+      '--secondary-background',
+      '--text-primary',
+      '--primary-background',
+      '--border-default'
+    ]
+    const oldVars = ['--bg-color', '--comfy-menu-bg', '--border-color', '--primary-bg']
+    const probe = (el, names) => {
+      const o = {}
+      if (!el) return o
+      const s = getComputedStyle(el)
+      names.forEach(n => { o[n] = s.getPropertyValue(n) })
+      return o
+    }
+    const result = {
+      themeMode: themeMode.value,
+      htmlClass: root.className,
+      hasDarkTheme: root.classList.contains('dark-theme'),
+      legacyManualKey: localStorage.getItem(THEME_MANUAL_KEY),
+      state: window.__weilinThemeState,
+      comfyNewVars: probe(root, newVars),
+      comfyOldVars: probe(root, oldVars),
+      containerInline: {},
+      containerComputed: {}
+    }
+    if (container) {
+      ;[
+        '--weilin-prompt-ui-primary-bg',
+        '--weilin-prompt-ui-primary-text',
+        '--weilin-prompt-ui-primary-color',
+        '--weilin-prompt-ui-border-color'
+      ].forEach(n => {
+        result.containerInline[n] = container.style.getPropertyValue(n)
+        result.containerComputed[n] = cs ? cs.getPropertyValue(n) : ''
+      })
+    }
+    console.log('weilin theme diag:', result)
+    return result
+  }
+
+  /**
+   * 调色板跟随探针：实测插件 UI 里各个关键元素**当前真实渲染出来的颜色**。
+   * 用于回答"到底哪些元素跟随了、哪些没跟随"——比只看变量值直观。
+   * 用法：控制台执行 weilinPaletteProbe()
+   */
+  window.weilinPaletteProbe = () => {
+    const container = document.getElementById('weilin_comfyui_tools_prompt_ui_div')
+    if (!container) return { error: 'container not found' }
+    const pick = (sel, label, prop) => {
+      const el = container.querySelector(sel)
+      if (!el) return { label, sel, missing: true }
+      const s = getComputedStyle(el)
+      const v = s.getPropertyValue(prop)
+      // 沿祖先链向上找第一个"有效"的背景（用于判断视觉上是否真的变了）
+      return { label, sel, value: v }
+    }
+    const effBg = (el) => {
+      let n = el
+      while (n && n !== document.body) {
+        const s = getComputedStyle(n)
+        const bg = s.backgroundColor
+        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return { sel: null, bg }
+        n = n.parentElement
+      }
+      return { bg: '' }
+    }
+    const probeList = [
+      ['.weilin_prompt_ui_prompt-box', '根盒子', 'background-color'],
+      ['.weilin_prompt_ui_draggable-window', '窗口外框', 'background-color'],
+      ['.weilin_prompt_ui_draggable-window', '窗口边框', 'border-top-color'],
+      ['.weilin_prompt_ui_window-header', '窗口标题栏', 'background-color'],
+      ['.weilin_prompt_ui_window-title', '窗口标题文字', 'color'],
+      ['.weilin_prompt_ui_close-btn', '关闭按钮', 'color'],
+      ['.center-container', '操作栏容器', 'background-color'],
+      ['.action-item .action-text', '操作项文字', 'color'],
+      ['.action-item svg', '操作项图标', 'fill'],
+      ['.input-area', '输入框', 'background-color'],
+      ['.input-area', '输入框文字', 'color'],
+      ['.input-area', '输入框边框', 'border-top-color'],
+      ['.tokens-container', '标签容器', 'background-color'],
+      ['.token-item-box', '提示词标签', 'background-color'],
+      ['.token-item-box', '提示词标签文字', 'color'],
+      ['.translate-btn', '功能按钮', 'color'],
+      ['.tag-search-input', '搜索框', 'background-color'],
+      ['.autocomplete-container', '补全弹窗', 'background-color'],
+      ['.theme-switch .action-text', '主题按钮文案', 'color']
+    ]
+    const rootCs = getComputedStyle(document.documentElement)
+    const gv = (n) => (rootCs.getPropertyValue(n) || '').trim()
+    const out = {
+      themeMode: themeMode.value,
+      trueDark: isDark.value,
+      // ComfyUI 面板/菜单层真实取值（决定插件窗口该跟谁）
+      comfyPanel: {
+        comfyMenuBg: gv('--comfy-menu-bg'),
+        comfyMenuSecondaryBg: gv('--comfy-menu-secondary-bg'),
+        bgColor: gv('--bg-color'),
+        fgColor: gv('--fg-color'),
+        comfyInputBg: gv('--comfy-input-bg'),
+        borderColor: gv('--border-color'),
+        contentBg: gv('--content-bg'),
+        descripText: gv('--descrip-text'),
+        inputText: gv('--input-text'),
+        palettePanelSurface: gv('--palette-interface-panel-surface'),
+        paletteHoverSurface: gv('--palette-interface-panel-hover-surface'),
+        htmlInline_comfyMenuBg: document.documentElement.style.getPropertyValue('--comfy-menu-bg') || '(none)'
+      },
+      comfy: {
+        baseBackground: gv('--base-background'),
+        secondaryBackground: gv('--secondary-background'),
+        tertiaryBackground: gv('--tertiary-background'),
+        interfacePanelSurface: gv('--interface-panel-surface'),
+        primaryBackground: gv('--primary-background'),
+        textPrimary: gv('--text-primary'),
+        borderDefault: gv('--border-default')
+      },
+      // 实测：ComfyUI 自己的右键菜单/对话框到底渲染成什么色
+      comfyLive: (() => {
+        const r = {}
+        const probeSel = (sel) => {
+          const el = document.querySelector(sel)
+          if (!el) return '(missing)'
+          const s = getComputedStyle(el)
+          return s.backgroundColor + ' / ' + s.color
+        }
+        r.liteContextMenu = probeSel('.litegraph.litecontextmenu')
+        r.comfyMenu = probeSel('.comfy-menu')
+        r.liteDialog = probeSel('.litegraph .dialog')
+        r.graphCanvas = probeSel('.graph-canvas-container') || probeSel('#graph-canvas')
+        r.body = getComputedStyle(document.body).backgroundColor
+        return r
+      })(),
+      switchMode: container.querySelector('.theme-switch')?.getAttribute('data-mode') || '(missing)',
+      switchText: container.querySelector('.theme-switch .action-text')?.textContent || '(missing)',
+      inlineVarCount: container.style.length,
+      elements: probeList.map(([sel, label, prop]) => pick(sel, label, prop))
+    }
+    // 根盒子的有效背景（穿透透明层）
+    const boxEl = container.querySelector('.weilin_prompt_ui_prompt-box')
+    if (boxEl) out.effectiveRootBg = effBg(boxEl).bg
+    console.log('weilin palette probe:', out)
+    return out
+  }
+}
+
+// 未处于强制档时，实时跟随 ComfyUI 主题/调色板变化
+const startComfyThemeWatch = () => {
+  if (stopComfyThemeWatch) return
+  stopComfyThemeWatch = watchComfyTheme((dark) => {
+    // 通知订阅者（如 ThemeSwitch 的图标状态）ComfyUI 主题已变
+    try {
+      window.dispatchEvent(new CustomEvent('weilin-comfy-theme-change', { detail: { dark } }))
+    } catch (e) {
+      // 忽略
+    }
+    const container = document.getElementById('weilin_comfyui_tools_prompt_ui_div')
+    if (themeMode.value !== 'follow') {
+      // 强制档：data-theme 保持不变，但 ComfyUI 换了调色板时仍需把"当前侧的预设"
+      // 重新压上去——否则旧调色板残留的覆盖变量会一直挂在容器上。
+      if (container) enforceSidePreset(container, isDark.value)
+      return
+    }
+    isDark.value = dark
+    // 用刚探测到的 dark，而非 ref（ref 可能已被别处写成旧值）
+    applyTheme(true, dark)
+  })
 }
 
 // 组件卸载时注销所有窗口
 onUnmounted(() => {
-  Object.keys(windows.value).forEach(windowName => {
-    windowManager.unregisterWindow(windowName)
-  })
+  // 窗口注销由 DraggableWindow 卸载时按 props.name 自行完成
 
   // 移除消息监听
   window.removeEventListener('message', handleMessage)
+
+  // 停止 ComfyUI 主题监听
+  if (stopComfyThemeWatch) {
+    stopComfyThemeWatch()
+    stopComfyThemeWatch = null
+  }
 
   // 清除版本更新定时器
   if (versionUpdateTimer.value) {
@@ -440,16 +801,26 @@ const loraManagerRef = ref()
 const loraDetailLoraStackRef = ref()
 const danbooruManagerRef = ref()
 
+// 提示词编辑器工具栏的开关式打开：消息带 toggle 标记且目标窗口已可见时关闭它，否则打开并激活
+const openOrToggleWindow = (msgData, win, wmKey) => {
+  if (msgData?.data?.toggle && win.visible) {
+    win.visible = false
+  } else {
+    win.visible = true
+    windowManager.setActiveWindow(wmKey)
+  }
+}
+
 // 处理消息
 const handleMessage = (event) => {
+  if (!isTrustedMessage(event)) return
   if (event.data.type === 'weilin_prompt_ui_openTagManager') {
     tagManager.value = 'manager'
     windows.value.tag.visible = true
-    windowManager.setActiveWindow('tag')
+    windowManager.setActiveWindow('tagManager')
   } else if (event.data.type === 'weilin_prompt_ui_openTagManager_prompt') {
     tagManager.value = 'prompt'
-    windows.value.tag.visible = true
-    windowManager.setActiveWindow('tag')
+    openOrToggleWindow(event.data, windows.value.tag, 'tagManager')
   } else if (event.data.type === 'weilin_prompt_ui_openPromptBox') {
     // 按钮点击打开promptBox
 
@@ -463,43 +834,56 @@ const handleMessage = (event) => {
     nextTick(() => {
       promptBoxRef.value.setPromptText(event.data.prompt)
     })
-    windowManager.setActiveWindow('prompt')
+    windowManager.setActiveWindow('promptBox')
 
   } else if (event.data.type === 'weilin_prompt_ui_openLoraManager') {
     loraManager.value = 'look'
-    windows.value.lora.visible = true
-    windowManager.setActiveWindow('lora')
+    openOrToggleWindow(event.data, windows.value.lora, 'loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_openLoraManager_addLora') {
     loraManager.value = 'addLora'
     windows.value.lora.visible = true
     nextTick(() => {
       loraManagerRef.value.openSetSeed(0, "")
     })
-    windowManager.setActiveWindow('lora')
+    windowManager.setActiveWindow('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_openLoraManager_addLora_stack') {
     loraManager.value = 'addLora'
     windows.value.lora.visible = true
     nextTick(() => {
       loraManagerRef.value.openSetSeed(1, event.data.seed)
     })
-    windowManager.setActiveWindow('lora')
+    windowManager.setActiveWindow('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_openLoraManager_addLora_stack_node') {
     loraManager.value = 'addLora'
     windows.value.lora.visible = true
     nextTick(() => {
       loraManagerRef.value.openSetSeed(2, event.data.seed)
     })
-    windowManager.setActiveWindow('lora')
+    windowManager.setActiveWindow('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_openHistoryManager') {
-    windows.value.history.visible = true
-    windowManager.setActiveWindow('history')
+    openOrToggleWindow(event.data, windows.value.history, 'historyManager')
   } else if (event.data.type === 'weilin_prompt_ui_openAiWindow') {
-    windows.value.ai_window.visible = true
-    windowManager.setActiveWindow('ai_window')
+    openOrToggleWindow(event.data, windows.value.ai_window, 'aiWindow')
   } else if (event.data.type === 'weilin_prompt_ui_open_node_list_window') {
     windows.value.node_list_window.visible = true
-    windowManager.setActiveWindow('node_list_window')
+    windowManager.setActiveWindow('nodeListWindow')
 
+  } else if (event.data.type === 'weilin_prompt_ui_node_executed_save_history') {
+    // 节点执行完成：把该节点的提示词存入历史（多节点工作流各自入史，服务端按内容去重）
+    const executedPrompt = typeof event.data.prompt === 'string' ? event.data.prompt : ''
+    if (executedPrompt.replace(/\s/g, '').length > 0) {
+      historyApi.saveHistory({
+        tag: JSON.stringify({
+          prompt: executedPrompt,
+          lora: event.data.lora || "",
+          temp_prompt: [],
+          temp_lora: ""
+        })
+      }).catch((err) => {
+        // 保存失败不能完全静默：否则该节点会被遗漏且无从排查
+        console.warn('[WeiLin] 节点历史保存失败:', err);
+      });
+    }
   } else if (event.data.type === 'weilin_prompt_ui_prompt_finish_prompt') {
     window.postMessage({
       type: 'weilin_prompt_ui_prompt_update_prompt_' + thisEditPromptId.value,
@@ -513,15 +897,15 @@ const handleMessage = (event) => {
     nextTick(() => {
       promptBoxRef.value.setPromptText(globalPrompt.value)
     })
-    windowManager.setActiveWindow('prompt')
+    windowManager.setActiveWindow('promptBox')
   } else if (event.data.type === 'weilin_prompt_ui_open_global_tag_manager') {
     tagManager.value = 'manager'
     windows.value.tag.visible = true
-    windowManager.setActiveWindow('tag')
+    windowManager.setActiveWindow('tagManager')
   } else if (event.data.type === 'weilin_prompt_ui_open_global_lora_manager') {
     loraManager.value = 'look'
     windows.value.lora.visible = true
-    windowManager.setActiveWindow('lora')
+    windowManager.setActiveWindow('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_prompt_update_prompt_global') {
     globalPrompt.value = event.data.data
   } else if (event.data.type === 'weilin_prompt_ui_floating_ball_setting') {
@@ -529,20 +913,18 @@ const handleMessage = (event) => {
   } else if (event.data.type === 'weilin_prompt_ui_restore_window') {
     restoreWindowsToDefault();
   } else if (event.data.type === 'weilin_prompt_ui_open_cloud_window') {
-    windows.value.cloud_window.visible = true
-    windowManager.setActiveWindow('cloud_window')
+    openOrToggleWindow(event.data, windows.value.cloud_window, 'cloudWindow')
   } else if (event.data.type === 'weilin_prompt_ui_open_node_lora_stack_window') {
     windows.value.lora_stack_window.visible = true
     nextTick(() => {
       loraStackRef.value.initLoraStack(event.data.prompt, event.data.seed)
     })
-    windowManager.setActiveWindow('lora_stack_window')
+    windowManager.setActiveWindow('loraStackWindow')
   } else if (event.data.type === "weilin_prompt_ui_openLoraDetail") {
     loraDetailLoraStackRef.value.open({ name: event.data.lora })
 
   } else if (event.data.type === "weilin_prompt_ui_open_danbooru_manager_window") {
-    windows.value.danbooru_manager_window.visible = true
-    windowManager.setActiveWindow('danbooru_manager_window')
+    openOrToggleWindow(event.data, windows.value.danbooru_manager_window, 'DanbooruManagerWindow')
 
   } else if (event.data.type === 'weilin_prompt_ui_prompt_inner_get_node_tag_template_id') {
     window.postMessage({

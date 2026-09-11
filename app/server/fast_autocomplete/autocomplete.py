@@ -47,7 +47,7 @@ async def fuzzy_search(query, limit=10):
         remaining_limit = limit - len(results)
         danbooru_tag_query = '''
             SELECT tag, translate, NULL AS color, color_id,
-                   CASE 
+                   CASE
                        WHEN tag = ? THEN 100  -- 完全匹配
                        WHEN tag LIKE ? THEN 90  -- 前缀匹配
                        WHEN tag LIKE ? THEN 80  -- 包含匹配
@@ -72,7 +72,7 @@ async def fuzzy_search(query, limit=10):
             f'%{query}%',         # WHERE条件
             remaining_limit
         ))
-        
+
         for result in danbooru_tag_results:
             results.append({
                 "text": result[0],

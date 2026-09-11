@@ -115,7 +115,7 @@ def get_template_list():
                     with open(file_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                         file_name = data.get('file_name', '')
-                except:
+                except Exception:
                     file_name = ''
 
                 file_list.append({

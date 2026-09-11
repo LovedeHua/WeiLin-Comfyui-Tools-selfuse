@@ -53,6 +53,12 @@ headers = {
     'Accept': 'application/json'
 }
 
+# api.github.com 未认证限额仅 60 次/小时/IP，共享出口 IP 极易耗尽并触发 403 网络错误；
+# 设置环境变量 GITHUB_TOKEN 后认证限额提升为 5000 次/小时（与 check_and_initialize_db 的局部逻辑保持一致）
+_token = os.environ.get('GITHUB_TOKEN')
+if _token:
+    headers['Authorization'] = f'token {_token}'
+
 
 async def _get_connection(db_type: str) -> aiosqlite.Connection:
     """从连接池获取数据库连接"""
@@ -363,8 +369,8 @@ def update_uuids(conn):
         
         # 从Gitee获取SQL文件内容
         # sql_url = "https://api.gitcode.com/api/v5/repos/qq_27627297/WeiLin-Comfyui-Tools-Prompt/raw/tags/2025_03_31/tags_2025_03_31.sql?access_token=y7S27_wDHXy1xaSQjupJk-Wy"
-        sql_url = "https://raw.githubusercontent.com/weilin9999/WeiLin-Comfyui-Tools-Prompt/refs/heads/master/tags/2025_03_31/tags_2025_03_31.sql"
-        response = requests.get(sql_url, headers=headers)
+        sql_url = "https://raw.githubusercontent.com/LovedeHua/WeiLin-Comfyui-Tools-Prompt/refs/heads/master/tags/2025_03_31/tags_2025_03_31.sql"
+        response = requests.get(sql_url, headers=headers, timeout=(10, 120))
         response.raise_for_status()
         sql_content = response.text
 
@@ -692,11 +698,11 @@ def check_and_initialize_db(db_type):
     db_map = {
         'tags': {
             'path': tags_db_path,
-            'url': 'https://api.github.com/repos/weilin9999/WeiLin-Comfyui-Tools-Prompt/contents/tags/2025_03_31'
+            'url': 'https://api.github.com/repos/LovedeHua/WeiLin-Comfyui-Tools-Prompt/contents/tags/2025_03_31'
         },
         'danbooru': {
             'path': danbooru_db_path,
-            'url': 'https://api.github.com/repos/weilin9999/WeiLin-Comfyui-Tools-Prompt/contents/danbooru/2025_04_01'
+            'url': 'https://api.github.com/repos/LovedeHua/WeiLin-Comfyui-Tools-Prompt/contents/danbooru/2025_04_01'
         }
     }
     
@@ -717,7 +723,7 @@ def check_and_initialize_db(db_type):
             print("大文件处理速度可能会需要点时间，请耐心等待...")
             
             # 获取目录下的所有SQL文件
-            response = requests.get(db_info['url'], headers=headers)
+            response = requests.get(db_info['url'], headers=headers, timeout=(10, 120))
             response.raise_for_status()
             
             files = response.json()
@@ -732,8 +738,8 @@ def check_and_initialize_db(db_type):
                     print(f"正在处理文件: {file['name']}")
 
                     # 从GitHub获取SQL文件内容
-                    sql_url = "https://raw.githubusercontent.com/weilin9999/WeiLin-Comfyui-Tools-Prompt/master/" + file['path']
-                    response = requests.get(sql_url, headers=headers)
+                    sql_url = "https://raw.githubusercontent.com/LovedeHua/WeiLin-Comfyui-Tools-Prompt/master/" + file['path']
+                    response = requests.get(sql_url, headers=headers, timeout=(10, 120))
                     response.raise_for_status()
                     sql_content = response.text
 
@@ -773,8 +779,8 @@ def install_cloud_file_db(db_type, paths):
                     print(f"正在处理文件: {path_url}")
 
                     # 从GitCode获取SQL文件内容
-                    sql_url = "https://raw.githubusercontent.com/weilin9999/WeiLin-Comfyui-Tools-Prompt/master/"+path_url
-                    response = requests.get(sql_url, headers=headers)
+                    sql_url = "https://raw.githubusercontent.com/LovedeHua/WeiLin-Comfyui-Tools-Prompt/master/"+path_url
+                    response = requests.get(sql_url, headers=headers, timeout=(10, 120))
                     response.raise_for_status()
                     sql_content = response.text
 
@@ -790,38 +796,44 @@ def install_cloud_file_db(db_type, paths):
     finally:
         conn.close()
 
+# 数据库操作锁：共享连接上的 execute/commit 若并发交错，可能把半截事务一起 commit，这里串行化保证正确性
+_db_op_lock = asyncio.Lock()
+
 async def execute_query(db_type: str, query: str, params: Tuple[Any, ...] = ()) -> None:
     """执行SQL查询"""
     conn = await _get_connection(db_type)
-    try:
-        async with conn.cursor() as cursor:
-            await cursor.execute(query, params)
-            await conn.commit()
-    except aiosqlite.Error as e:
-        print(f"执行查询时出错: {e}")
-        raise
+    async with _db_op_lock:
+        try:
+            async with conn.cursor() as cursor:
+                await cursor.execute(query, params)
+                await conn.commit()
+        except aiosqlite.Error as e:
+            print(f"执行查询时出错: {e}")
+            raise
 
 async def fetch_all(db_type: str, query: str, params: Tuple[Any, ...] = ()) -> List[Tuple[Any, ...]]:
     """获取所有结果"""
     conn = await _get_connection(db_type)
-    try:
-        async with conn.cursor() as cursor:
-            await cursor.execute(query, params)
-            return await cursor.fetchall()
-    except aiosqlite.Error as e:
-        print(f"获取数据时出错: {e}")
-        raise
+    async with _db_op_lock:
+        try:
+            async with conn.cursor() as cursor:
+                await cursor.execute(query, params)
+                return await cursor.fetchall()
+        except aiosqlite.Error as e:
+            print(f"获取数据时出错: {e}")
+            raise
 
 async def fetch_one(db_type: str, query: str, params: Tuple[Any, ...] = ()) -> Optional[Tuple[Any, ...]]:
     """获取单条结果"""
     conn = await _get_connection(db_type)
-    try:
-        async with conn.cursor() as cursor:
-            await cursor.execute(query, params)
-            return await cursor.fetchone()
-    except aiosqlite.Error as e:
-        print(f"获取数据时出错: {e}")
-        raise
+    async with _db_op_lock:
+        try:
+            async with conn.cursor() as cursor:
+                await cursor.execute(query, params)
+                return await cursor.fetchone()
+        except aiosqlite.Error as e:
+            print(f"获取数据时出错: {e}")
+            raise
 
 # 修改set_language函数
 def set_language(lang):
@@ -857,10 +869,20 @@ set_language(localLang)
 import atexit
 
 @atexit.register
-async def _close_connections() -> None:
-    """关闭所有数据库连接"""
-    for conn in _connection_pool.values():
-        try:
-            await conn.close()
-        except:
-            pass
+def _close_connections() -> None:
+    """进程退出时关闭所有数据库连接。
+
+    注意：atexit 回调必须是同步函数，此前注册的 async 函数永不会被 await，
+    导致连接从未真正关闭；这里用新建事件循环同步执行关闭。
+    """
+    async def _close_all():
+        for conn in _connection_pool.values():
+            try:
+                await conn.close()
+            except Exception:
+                pass
+
+    try:
+        asyncio.run(_close_all())
+    except Exception:
+        pass
