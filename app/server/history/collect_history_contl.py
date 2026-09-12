@@ -20,7 +20,26 @@ async def read_collect_history():
     return result
 
 async def add_collect_history(tag, name="", color=""):
-    """添加新的历史记录到 collect_history 表"""
+    """添加新的历史记录到 collect_history 表
+
+    去重机制：已存在 tag 完全一致且未删除的收藏时不重复插入，
+    返回 existed=True 及已存在条目信息；所有新增入口统一受益。
+    """
+    dup_query = "SELECT id_index, tag, name, color, create_time FROM collect_history WHERE is_deleted = 0 AND tag = ? LIMIT 1"
+    existed_row = await fetch_one('history', dup_query, (tag,))
+    if existed_row:
+        return {
+            "info": "Existed",
+            "existed": True,
+            "entry": {
+                "id_index": existed_row[0],
+                "tag": existed_row[1],
+                "name": existed_row[2],
+                "color": existed_row[3],
+                "create_time": existed_row[4]
+            }
+        }
+
     create_time = int(time.time())
     
     # 检查是否有可复用的 id_index
@@ -42,8 +61,8 @@ async def add_collect_history(tag, name="", color=""):
             VALUES (?, ?, ?, ?)
         '''
         await execute_query('history',query, (tag, name, color, create_time))
-    
-    return {"info": "Append"}
+
+    return {"info": "Append", "existed": False}
 
 async def delete_collect_history(id_index):
     """删除指定 id_index 的历史记录"""

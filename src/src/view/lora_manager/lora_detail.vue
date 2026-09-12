@@ -1,8 +1,7 @@
 <template>
     <DraggableWindow v-if="isOpen" name="loraDetail" :title="t('lora.title')" :position="windows.loraDetail.position"
         :size="windows.loraDetail.size" :z-index="windowManager.getZIndex('loraDetail')"
-        @update:position="updatePosition('loraDetail', $event)" @update:size="updateSize('loraDetail', $event)"
-        @active="windowManager.setActiveWindow('loraDetail')" @close="closeWindow('loraDetail')">
+        @update:position="updatePosition('loraDetail', $event)" @update:size="updateSize('loraDetail', $event)" @close="closeWindow('loraDetail')">
         <template #default>
             <div class="lora-detail__content" ref="loraContent">
 
@@ -80,11 +79,6 @@
                                     <template v-else-if="isCivitaiNotFound">
                                         <div class="not-found">
                                             <i>{{ t('lora.modelNotFound') }}</i>
-                                            <svg viewBox="0 0 24 24" width="16" height="16" class="help-icon"
-                                                :title="t('lora.modelNotFoundTip')">
-                                                <path
-                                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                            </svg>
                                         </div>
                                     </template>
                                     <template v-else>
@@ -99,11 +93,6 @@
                             <tr :class="{ 'is-editing': isEditing.name }">
                                 <td class="label">
                                     {{ t('lora.name') }}
-                                    <svg viewBox="0 0 24 24" width="16" height="16" class="help-icon"
-                                        :title="t('lora.nameTip')">
-                                        <path
-                                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                    </svg>
                                 </td>
                                 <td>
                                     <input v-if="isEditing.name" v-model="editValues.name" type="text"
@@ -156,11 +145,6 @@
                                 <tr :class="{ 'is-editing': isEditing[field.key] }">
                                     <td class="label">
                                         {{ field.label }}
-                                        <svg v-if="field.tip" viewBox="0 0 24 24" width="16" height="16"
-                                            class="help-icon" :title="field.tip">
-                                            <path
-                                                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                        </svg>
                                     </td>
                                     <td>
                                         <input v-if="isEditing[field.key]" v-model="editValues[field.key]"
@@ -227,11 +211,6 @@
                                         <div class="trained-words-header">
                                             <div class="trained-words-label">
                                                 <span>{{ t('lora.trainedWords') }}</span>
-                                                <svg viewBox="0 0 24 24" width="14" height="14" class="help-icon"
-                                                    :title="t('lora.trainedWordsTip')">
-                                                    <path
-                                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                                </svg>
                                             </div>
                                             <div v-if="selectedWords.length" class="word-selection-bar">
                                                 <span>{{ t('lora.selectedWords', { count: selectedWords.length }) }}</span>
@@ -283,6 +262,7 @@
                                     <!-- 图片元素 -->
                                     <img
                                         :src="img.url"
+                                        loading="lazy"
                                         v-show="!(img.type === 'video' || isVideoUrl(img.url))"
                                         draggable="false"
                                         @click.stop="openPreview(img.url, img)"
@@ -597,59 +577,82 @@ const init = () => {
         loraWorks: false,
         loraWorksValue: "",
     };
+    // 两段式加载：第一段仅本地数据秒开（后端此路径零网络探测）；
+    // 第二段 civitai 缓存缺失时异步补全（离线/失败静默保持本地数据）
+    const targetFile = fileURL.value;
     loraApi
-        .getLoraDetail({ file: fileURL.value, refresh: false, light: false })
+        .getLoraDetail({ file: targetFile, refresh: false, light: false })
         .then((res) => {
-            // console.log(res.data.data)
-            loraInfo.value = res.data;
-            loraFile.value = loraInfo.value.file || '';
-            nextTick(function () {
-                var _j, _k, _u, _v, _w, _x;
-                loraInfo.value.name =
-                    loraInfo.value.name ||
-                    ((_k =
-                        (_j = loraInfo.value.raw) === null || _j === void 0
-                            ? void 0
-                            : _j.metadata) === null || _k === void 0
-                        ? void 0
-                        : _k.ss_output_name === void 0
-                            ? _k["modelspec.title"]
-                            : _k.ss_output_name) ||
-                    "";
-                editValues.value.nameValue = loraInfo.value.name;
-                loraInfo.value.strengthMin =
-                    (_u = loraInfo.value.strengthMin) !== null && _u !== void 0
-                        ? _u
-                        : "";
-                editValues.value.minValue = loraInfo.value.strengthMin;
-                loraInfo.value.strengthMax =
-                    (_v = loraInfo.value.strengthMax) !== null && _v !== void 0
-                        ? _v
-                        : "";
-                editValues.value.maxValue = loraInfo.value.strengthMax;
-                loraInfo.value.userNote =
-                    (_w = loraInfo.value.userNote) !== null && _w !== void 0
-                        ? _w
-                        : "";
-                editValues.value.notesValue = loraInfo.value.userNote;
-                loraInfo.value.loraWorks =
-                    (_x = loraInfo.value.loraWorks) !== null && _x !== void 0
-                        ? _x
-                        : "";
-                editValues.value.loraWorksValue = loraInfo.value.loraWorks;
-
-                if (loraInfo.value.user_diy_fileds){
-                    userEditFields.value = loraInfo.value.user_diy_fileds;
-                }
-
-                loading.value = false;
-            });
+            if (fileURL.value !== targetFile) return;
+            applyLoraInfoData(res.data);
+            const raw = (res.data && res.data.raw) || {};
+            if (!raw.civitai || Object.keys(raw.civitai).length === 0) {
+                fetchCivitaiAsync(targetFile);
+            }
         })
         .catch((err) => {
             message({ type: "warn", str: 'message.networkError' });
             loading.value = false;
         });
 }
+
+// 渲染 lora 数据并做字段兜底（init 第一段与 civitai 异步补全共用）
+const applyLoraInfoData = (data) => {
+    loraInfo.value = data;
+    loraFile.value = loraInfo.value.file || '';
+    nextTick(function () {
+        var _j, _k, _u, _v, _w, _x;
+        loraInfo.value.name =
+            loraInfo.value.name ||
+            ((_k =
+                (_j = loraInfo.value.raw) === null || _j === void 0
+                    ? void 0
+                    : _j.metadata) === null || _k === void 0
+                ? void 0
+                : _k.ss_output_name === void 0
+                    ? _k["modelspec.title"]
+                    : _k.ss_output_name) ||
+            "";
+        editValues.value.nameValue = loraInfo.value.name;
+        loraInfo.value.strengthMin =
+            (_u = loraInfo.value.strengthMin) !== null && _u !== void 0
+                ? _u
+                : "";
+        editValues.value.minValue = loraInfo.value.strengthMin;
+        loraInfo.value.strengthMax =
+            (_v = loraInfo.value.strengthMax) !== null && _v !== void 0
+                ? _v
+                : "";
+        editValues.value.maxValue = loraInfo.value.strengthMax;
+        loraInfo.value.userNote =
+            (_w = loraInfo.value.userNote) !== null && _w !== void 0
+                ? _w
+                : "";
+        editValues.value.notesValue = loraInfo.value.userNote;
+        loraInfo.value.loraWorks =
+            (_x = loraInfo.value.loraWorks) !== null && _x !== void 0
+                ? _x
+                : "";
+        editValues.value.loraWorksValue = loraInfo.value.loraWorks;
+
+        if (loraInfo.value.user_diy_fileds){
+            userEditFields.value = loraInfo.value.user_diy_fileds;
+        }
+
+        loading.value = false;
+    });
+}
+
+// 第二段：异步补全 civitai（maybe 语义——后端仅本地缓存缺失时联网；失败静默保持本地数据）
+const fetchCivitaiAsync = (targetFile) => {
+    loraApi
+        .getLoraDetail({ file: targetFile, refresh: false, light: false, fetch_civitai: true })
+        .then((res) => {
+            if (fileURL.value !== targetFile) return;
+            applyLoraInfoData(res.data);
+        })
+        .catch(() => { });
+};
 
 // 提取文件名
 const extractFileNameFromUrl = (url) => {
@@ -1339,7 +1342,7 @@ const isVideoUrl = (url) => {
     width: auto;
     height: 28px;
     padding: 0 10px;
-    border-radius: 14px;
+    border-radius: 6px;
     background-color: rgba(187, 187, 187, 0.5);
     display: flex;
     align-items: center;
@@ -1425,7 +1428,7 @@ const isVideoUrl = (url) => {
 
 .lora-detail__tag {
     padding: 4px 12px;
-    border-radius: 16px;
+    border-radius: 6px;
     font-size: 14px;
 }
 
@@ -1446,7 +1449,7 @@ const isVideoUrl = (url) => {
 .lora-raw-btn {
     padding: 0 10px;
     height: 28px;
-    border-radius: 14px;
+    border-radius: 6px;
     background-color: rgba(187, 187, 187, 0.5);
     display: flex;
     align-items: center;
@@ -1498,7 +1501,7 @@ input:focus {
 
 .word-item {
     padding: 4px 12px;
-    border-radius: 16px;
+    border-radius: 6px;
     background: var(--weilin-prompt-ui-tag-bg);
     color: var(--weilin-prompt-ui-tag-text);
     cursor: pointer;
@@ -1551,13 +1554,6 @@ input:focus {
     flex-shrink: 0;
 }
 
-.trained-words-label .help-icon {
-    fill: var(--weilin-prompt-ui-label);
-    opacity: 0.7;
-    width: 14px;
-    height: 14px;
-}
-
 .word-selection-bar {
     display: flex;
     align-items: center;
@@ -1570,7 +1566,7 @@ input:focus {
 .word-selection-bar .copy-btn {
     padding: 3px 10px;
     font-size: 11px;
-    border-radius: 10px;
+    border-radius: 6px;
     background: var(--weilin-prompt-ui-primary-color);
     color: #fff;
     border: none;
@@ -1598,7 +1594,7 @@ input:focus {
     gap: 5px;
     padding: 6px 14px;
     height: 30px;
-    border-radius: 15px;
+    border-radius: 6px;
     background: #fff;
     color: #222;
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -1657,7 +1653,7 @@ input:focus {
     font-size: 11px;
     flex-shrink: 0;
     padding: 1px 6px;
-    border-radius: 8px;
+    border-radius: 4px;
     background: rgba(0, 0, 0, 0.06);
     line-height: 1;
     display: inline-flex;
@@ -1683,7 +1679,7 @@ input:focus {
     justify-content: center;
     padding: 0 18px;
     height: 30px;
-    border-radius: 15px;
+    border-radius: 6px;
     background: #fff;
     color: var(--weilin-prompt-ui-primary-color);
     font-size: 13px;
@@ -1951,7 +1947,7 @@ input:focus {
     right: 72px;
     height: 44px;
     padding: 0 16px;
-    border-radius: 22px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.4);
     color: #fff;

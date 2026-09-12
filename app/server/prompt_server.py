@@ -94,6 +94,36 @@ async def _get_lora_list_by_search(request):
     data = await request.json()
     return web.json_response({"data": await search_lora_files(data["search"])})
 
+
+@PromptServer.instance.routes.post(baseUrl+"check_lora_exists")
+async def _check_lora_exists(request):
+    """批量检查 Lora 路径是否存在于 loras 目录（收藏跟随 Lora 的存在性检测）"""
+    try:
+        data = await request.json()
+        names = data.get("names", [])
+    except Exception:
+        names = []
+    if not isinstance(names, list):
+        names = []
+    return web.json_response({"data": check_lora_files_exist(names)})
+
+
+@PromptServer.instance.routes.get(baseUrl+"get_embeddings_list")
+async def _get_embeddings_list(request):
+    """返回 embeddings 目录文件列表（去扩展名，与 ComfyUI 原生 /api/embeddings 响应同形，裸数组）。
+
+    供提示词自动补全的 embedding 候选使用：走插件自身路由，与标签库接口同链路，
+    不依赖 ComfyUI 原生 /api/embeddings（该端点在反向代理只转发部分路径前缀、
+    或老版本 ComfyUI 无 /api 前缀复制时可能不可达，导致前端 embedding 补全静默失效）。"""
+    try:
+        import folder_paths
+        embeddings = folder_paths.get_filename_list("embeddings")
+        data = [os.path.splitext(e)[0] for e in embeddings if isinstance(e, str) and e]
+    except Exception as e:
+        print(f"[WeiLin] 获取 embeddings 列表失败: {e}")
+        data = []
+    return web.json_response(data)
+
 # =======================================================================================================
 
 # ============================================= Lora 信息 ============================================
@@ -139,7 +169,14 @@ async def _api_get_loras_info(request):
     maybe_fetch_metadata = lora_file is not None
     if not is_param_falsy(request, 'light'):
         maybe_fetch_metadata = False
-    api_response = await get_loras_info_response(request, maybe_fetch_metadata=maybe_fetch_metadata)
+    # 两段式异步补全开关：显式传 fetch_civitai=true 时以 maybe 语义拉取 civitai
+    # （仅当本地 raw 缓存缺失时才探测+联网；配合前端先渲染本地数据、再异步补全）
+    maybe_fetch_civitai = False
+    if get_param(request, 'fetch_civitai') is not None and not is_param_falsy(request, 'fetch_civitai'):
+        maybe_fetch_civitai = True
+    api_response = await get_loras_info_response(request,
+                                                 maybe_fetch_civitai=maybe_fetch_civitai,
+                                                 maybe_fetch_metadata=maybe_fetch_metadata)
     return web.json_response(api_response)
 
 

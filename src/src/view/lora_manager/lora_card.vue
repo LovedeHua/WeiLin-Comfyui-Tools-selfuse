@@ -94,11 +94,6 @@
                                 <template v-else-if="isCivitaiNotFound">
                                     <div class="not-found">
                                         <i>{{ t('lora.modelNotFound') }}</i>
-                                        <svg viewBox="0 0 24 24" width="16" height="16" class="help-icon"
-                                            :title="t('lora.modelNotFoundTip')">
-                                            <path
-                                                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                        </svg>
                                     </div>
                                 </template>
                                 <template v-else>
@@ -113,11 +108,6 @@
                         <tr :class="{ 'is-editing': isEditing.name }">
                             <td class="label">
                                 {{ t('lora.name') }}
-                                <svg viewBox="0 0 24 24" width="16" height="16" class="help-icon"
-                                    :title="t('lora.nameTip')">
-                                    <path
-                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                </svg>
                             </td>
                             <td colspan="2">
                                 <input v-if="isEditing.name" v-model="editValues.name" type="text"
@@ -159,22 +149,16 @@
                             <tr :class="{ 'is-editing': isEditing[field.key] }">
                                 <td class="label">
                                     {{ field.label }}
-                                    <svg v-if="field.tip" viewBox="0 0 24 24" width="16" height="16" class="help-icon"
-                                        :title="field.tip">
-                                        <path
-                                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                    </svg>
                                 </td>
                                 <td>
                                     <span class="text">{{ loraInfo[field.key] }}</span>
                                 </td>
                                 <td class="actions">
-                                    <button class="copy-btn" @click="copyToClipboard(loraInfo[field.key])"
+                                    <button class="copy-btn field-copy-btn" @click="copyToClipboard(loraInfo[field.key])"
                                         :title="t('lora.copy')">
                                         <svg class="svg-icon" viewBox="0 0 24 24" width="16" height="16">
                                             <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                         </svg>
-                                        {{ t('lora.copy') }}
                                     </button>
                                 </td>
                             </tr>
@@ -192,12 +176,11 @@
                                         loraInfo.user_diy_fileds[key]?.value : '' }}</span>
                                 </td>
                                 <td class="actions">
-                                    <button class="copy-btn" @click="copyToClipboard(loraInfo.user_diy_fileds[key]?.value)"
+                                    <button class="copy-btn field-copy-btn" @click="copyToClipboard(loraInfo.user_diy_fileds[key]?.value)"
                                         :title="t('lora.copy')">
                                         <svg class="svg-icon" viewBox="0 0 24 24" width="16" height="16">
                                             <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                         </svg>
-                                        {{ t('lora.copy') }}
                                     </button>
                                 </td>
                             </tr>
@@ -210,11 +193,6 @@
                                     <div class="trained-words-header">
                                         <div class="trained-words-label">
                                             <span>{{ t('lora.trainedWords') }}</span>
-                                            <svg viewBox="0 0 24 24" width="14" height="14" class="help-icon"
-                                                :title="t('lora.trainedWordsTip')">
-                                                <path
-                                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
-                                            </svg>
                                         </div>
                                         <div v-if="selectedWords.length" class="word-selection-bar">
                                             <span>{{ t('lora.selectedWords', { count: selectedWords.length }) }}</span>
@@ -520,6 +498,8 @@ const init = () => {
         loraWorks: false,
         loraWorksValue: "",
     };
+    // 两段式加载：第一段仅本地数据秒开（后端此路径零网络探测）；
+    // 第二段 civitai 缓存缺失时异步补全（离线/失败静默保持本地数据）
     loraApi
         .getLoraDetail({ file: targetFile, refresh: false, light: false })
         .then((res) => {
@@ -527,54 +507,77 @@ const init = () => {
             if (currentRequestFile.value !== targetFile) {
                 return;
             }
-            loraInfo.value = res.data;
-            // 保存当前 lora 文件路径，用于设为封面
-            loraFile.value = loraInfo.value.file || '';
-            nextTick(function () {
-                var _j, _k, _u, _v, _w, _x;
-                loraInfo.value.name =
-                    loraInfo.value.name ||
-                    ((_k =
-                        (_j = loraInfo.value.raw) === null || _j === void 0
-                            ? void 0
-                            : _j.metadata) === null || _k === void 0
-                        ? void 0
-                        : _k.ss_output_name === void 0
-                            ? _k["modelspec.title"]
-                            : _k.ss_output_name) ||
-                    "";
-                editValues.value.nameValue = loraInfo.value.name;
-                loraInfo.value.strengthMin =
-                    (_u = loraInfo.value.strengthMin) !== null && _u !== void 0
-                        ? _u
-                        : "";
-                editValues.value.minValue = loraInfo.value.strengthMin;
-                loraInfo.value.strengthMax =
-                    (_v = loraInfo.value.strengthMax) !== null && _v !== void 0
-                        ? _v
-                        : "";
-                editValues.value.maxValue = loraInfo.value.strengthMax;
-                loraInfo.value.userNote =
-                    (_w = loraInfo.value.userNote) !== null && _w !== void 0
-                        ? _w
-                        : "";
-                editValues.value.notesValue = loraInfo.value.userNote;
-                loraInfo.value.loraWorks =
-                    (_x = loraInfo.value.loraWorks) !== null && _x !== void 0
-                        ? _x
-                        : "";
-                editValues.value.loraWorksValue = loraInfo.value.loraWorks;
-
-                userEditFields.value = loraInfo.value.user_diy_fileds;
-
-                loading.value = false;
-            });
+            applyLoraInfoData(res.data);
+            const raw = (res.data && res.data.raw) || {};
+            if (!raw.civitai || Object.keys(raw.civitai).length === 0) {
+                fetchCivitaiAsync(targetFile);
+            }
         })
         .catch((err) => {
             message({ type: "warn", str: 'message.networkError' });
             loading.value = false;
         });
 }
+
+// 渲染 lora 数据并做字段兜底（init 第一段与 civitai 异步补全共用）
+const applyLoraInfoData = (data) => {
+    loraInfo.value = data;
+    // 保存当前 lora 文件路径，用于设为封面
+    loraFile.value = loraInfo.value.file || '';
+    nextTick(function () {
+        var _j, _k, _u, _v, _w, _x;
+        loraInfo.value.name =
+            loraInfo.value.name ||
+            ((_k =
+                (_j = loraInfo.value.raw) === null || _j === void 0
+                    ? void 0
+                    : _j.metadata) === null || _k === void 0
+                ? void 0
+                : _k.ss_output_name === void 0
+                    ? _k["modelspec.title"]
+                    : _k.ss_output_name) ||
+            "";
+        editValues.value.nameValue = loraInfo.value.name;
+        loraInfo.value.strengthMin =
+            (_u = loraInfo.value.strengthMin) !== null && _u !== void 0
+                ? _u
+                : "";
+        editValues.value.minValue = loraInfo.value.strengthMin;
+        loraInfo.value.strengthMax =
+            (_v = loraInfo.value.strengthMax) !== null && _v !== void 0
+                ? _v
+                : "";
+        editValues.value.maxValue = loraInfo.value.strengthMax;
+        loraInfo.value.userNote =
+            (_w = loraInfo.value.userNote) !== null && _w !== void 0
+                ? _w
+                : "";
+        editValues.value.notesValue = loraInfo.value.userNote;
+        loraInfo.value.loraWorks =
+            (_x = loraInfo.value.loraWorks) !== null && _x !== void 0
+                ? _x
+                : "";
+        editValues.value.loraWorksValue = loraInfo.value.loraWorks;
+
+        userEditFields.value = loraInfo.value.user_diy_fileds;
+
+        loading.value = false;
+    });
+}
+
+// 第二段：异步补全 civitai（maybe 语义——后端仅本地缓存缺失时联网；失败静默保持本地数据）
+const fetchCivitaiAsync = (targetFile) => {
+    loraApi
+        .getLoraDetail({ file: targetFile, refresh: false, light: false, fetch_civitai: true })
+        .then((res) => {
+            // 悬浮窗口已切换到其他lora，丢弃旧数据
+            if (currentRequestFile.value !== targetFile) {
+                return;
+            }
+            applyLoraInfoData(res.data);
+        })
+        .catch(() => { });
+};
 
 const copyToClipboard = (text) => {
   navigator.clipboard.writeText(text)
@@ -1304,7 +1307,7 @@ defineExpose({
 
 .lora-detail__tag {
     padding: 4px 12px;
-    border-radius: 16px;
+    border-radius: 6px;
     font-size: 0.55em;
 }
 
@@ -1327,6 +1330,21 @@ defineExpose({
 .fetch-btn:hover,
 .copy-btn:hover {
     background: var(--weilin-prompt-ui-button-hover);
+}
+
+/* 字段行复制按钮：纯图标紧凑尺寸（title 悬浮提示替代按钮内文字） */
+.field-copy-btn {
+    padding: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.field-copy-btn .svg-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
 }
 
 /* 输入框样式 */
@@ -1372,11 +1390,6 @@ input:focus {
     font-size: 0.55em;
 }
 
-.trained-words-label .help-icon {
-    fill: var(--weilin-prompt-ui-label);
-    opacity: 0.7;
-}
-
 .word-selection-bar {
     display: flex;
     align-items: center;
@@ -1403,7 +1416,7 @@ input:focus {
     align-items: center;
     gap: 4px;
     padding: 5px 12px;
-    border-radius: 16px;
+    border-radius: 6px;
     background: var(--weilin-prompt-ui-tag-bg);
     color: var(--weilin-prompt-ui-tag-text);
     cursor: pointer;
@@ -1448,6 +1461,12 @@ input:focus {
     transition: opacity 0.3s ease;
 }
 
+/* 74.28：图标用 Civitai 官方品牌蓝（官网 design token colorPrimary #228BE6），
+   修复 SVG 无 fill 时默认黑色的问题 */
+.civitai-link .civitai-icon {
+    fill: #228be6;
+}
+
 .civitai-link:hover {
     opacity: 0.8;
 }
@@ -1469,7 +1488,7 @@ input:focus {
     display: inline-flex;
     align-items: center;
     padding: 4px 16px;
-    border-radius: 12px;
+    border-radius: 6px;
     background: var(--weilin-prompt-ui-tag-bg);
     color: var(--weilin-prompt-ui-primary-color);
     font-size: 0.55em;
@@ -1607,7 +1626,7 @@ input:focus {
     right: 72px;
     height: 44px;
     padding: 0 16px;
-    border-radius: 22px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.4);
     color: #fff;
@@ -1749,7 +1768,7 @@ input:focus {
     width: auto;
     height: 28px;
     padding: 0 10px;
-    border-radius: 14px;
+    border-radius: 6px;
     background-color: rgba(187, 187, 187, 0.5);
     display: flex;
     align-items: center;
@@ -1788,7 +1807,7 @@ input:focus {
     width: auto;
     height: 28px;
     padding: 0 10px;
-    border-radius: 14px;
+    border-radius: 6px;
     background-color: rgba(187, 187, 187, 0.5);
     display: flex;
     align-items: center;

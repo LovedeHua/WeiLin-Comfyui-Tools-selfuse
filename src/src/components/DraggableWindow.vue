@@ -74,7 +74,7 @@ const props = defineProps({
 
 const { t } = useI18n()
 
-const emit = defineEmits(['update:position', 'update:size', 'active', 'close'])
+const emit = defineEmits(['update:position', 'update:size', 'close'])
 
 const windowRef = ref(null)
 
@@ -156,18 +156,21 @@ const handleKeydown = (e) => {
   }
 }
 
-// 点击窗口：激活 + 聚焦 + 通知父组件置顶
+// 点击窗口：激活 + 聚焦
 const handleWindowMouseDown = (event) => {
-  // 智能焦点切换：点击窗口任意处即将该窗口提到最上层
+  // 点击按钮不激活宿主：入口按钮（打开其他窗口）若先隐式激活宿主、压低其他已打开窗口，
+  // 随后新窗口置顶时层叠就错了（74.32-74.36 曾为此维护"激活回退"机制，74.37 起废除——
+  // 按钮点击一律不改变层叠，点空白/标题栏/输入框才激活上浮）
+  const t = event && event.target
+  if (t && t.closest && t.closest('button')) return
+  // 智能焦点切换：点击窗口非按钮区域即将该窗口提到最上层
   windowManager.setActiveWindow(props.name)
   // 点击输入框/文本域等可编辑元素时不抢焦点：
   // 否则 windowRef.focus() 会让正在编辑的输入框 blur（如标签编辑会意外退出编辑状态）
-  const t = event && event.target
   const isEditable = !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))
   if (!isEditable) {
     windowRef.value?.focus()
   }
-  emit('active')
 }
 
 // 鼠标悬停智能切换焦点功能已取消：焦点切换仅由点击窗口触发
@@ -303,10 +306,6 @@ const stopResize = () => {
   document.removeEventListener('mouseup', stopResize)
 }
 
-const setActive = () => {
-  emit('active')
-}
-
 const close = () => {
   emit('close')
 }
@@ -323,7 +322,7 @@ const handleHeaderMouseDown = (event) => {
   }
   // 仅左键（button === 0）允许拖动
   if (event.button !== 0) return
-  handleWindowMouseDown()
+  handleWindowMouseDown(event)
   startDrag(event)
 }
 

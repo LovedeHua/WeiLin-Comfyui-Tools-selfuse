@@ -1,8 +1,7 @@
 <template>
     <DraggableWindow v-if="isOpen" name="loraRaw" :title="t('lora.rawTitle')" :position="windows.loraRaw.position"
         :size="windows.loraRaw.size" :z-index="windowManager.getZIndex('loraRaw')"
-        @update:position="updatePosition('loraRaw', $event)" @update:size="updateSize('loraRaw', $event)"
-        @active="windowManager.setActiveWindow('loraRaw')" @close="closeWindow('loraRaw')">
+        @update:position="updatePosition('loraRaw', $event)" @update:size="updateSize('loraRaw', $event)" @close="closeWindow('loraRaw')">
         <template #default>
             <div class="lora-raw__content">
                 <JsonViewer :value="loraInfo" copyable sort theme="dark" />

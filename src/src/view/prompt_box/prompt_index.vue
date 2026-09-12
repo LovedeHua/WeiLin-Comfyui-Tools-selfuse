@@ -99,6 +99,16 @@
           </button>
         </div>
 
+        <!-- 收藏夹窗口按钮 -->
+        <div class="action-item">
+          <button class="tag-manager-btn" @click="openFavoritesBox" :title="t('controls.favorites')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tag-icon" width="24" height="24">
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+            </svg>
+            <span class="action-text">{{ t('controls.favorites') }}</span>
+          </button>
+        </div>
+
         <!-- 新增 AI 对话按钮 -->
         <div class="action-item">
           <button class="tag-manager-btn" @click="openAIChat" :title="t('controls.aiChat')">
@@ -329,6 +339,14 @@
             </path>
           </svg>
           <span class="action-text">{{ t('promptBox.oneClickClearDisabled') }}</span>
+        </button>
+
+        <!-- 快速收藏按钮：弹出名称输入窗后把当前提示词与已加载 Lora 存入收藏夹 -->
+        <button class="translate-btn quick-fav-btn" @click="quickFavorite" :title="t('controls.quickFavorite')">
+          <svg class="utils-item-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+            <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z" />
+          </svg>
+          <span class="action-text">{{ t('controls.quickFavorite') }}</span>
         </button>
         </div>
 
@@ -602,6 +620,12 @@
                     d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
                 </svg>
               </button>
+              <button class="delete-btn sel-fav-btn" @click="favoriteSelectedTokens" title="收藏">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                </svg>
+              </button>
               <button class="delete-btn" @click="disableSelectedTokens" title="禁用">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="12" cy="12" r="10" fill="none" stroke="#ff4d4f" stroke-width="2" />
@@ -673,6 +697,18 @@
 
   <RandomSetting ref="randomSettingItem" />
   <favourItem ref="favourItemRef" />
+
+  <!-- 快速收藏名称输入窗：名称由用户决定，确认后把当前提示词与已加载 Lora 存入收藏夹 -->
+  <Dialog v-model="showQuickFavDialog" :title="t('controls.quickFavorite')" width="400px">
+    <div class="quick-fav-form">
+      <input type="text" v-model="quickFavName" class="quick-fav-name-input"
+        :placeholder="t('history.dialog.name_placeholder')" @keydown.enter="confirmQuickFavorite" />
+    </div>
+    <template #footer>
+      <button @click="showQuickFavDialog = false">{{ t('common.cancel') }}</button>
+      <button @click="confirmQuickFavorite">{{ t('common.confirm') }}</button>
+    </template>
+  </Dialog>
 </template>
 
 <script setup>
@@ -693,6 +729,7 @@ import RandomSetting from './components/random_setting.vue'
 import { randomTagApi } from '@/api/random_tag'
 import pako from 'pako'
 import favourItem from './components/favour.vue'
+import Dialog from '@/components/Dialog.vue'
 
 const randomSettingItem = ref(null)
 
@@ -2183,7 +2220,7 @@ const showControls = (index, event) => {
     top: `${rect.bottom + window.scrollY + rect.height + 10}px`,
     left: `${rect.left + rect.width / 2}px`
   };
-  if (!tokens.value[index].isLoraTag) {
+  if (!tokens.value[index].isLoraTag && localStorage.getItem('weilin_prompt_ui_tag_tips') !== 'false') {
     showTagTipsBox.value = true;
   }
 }
@@ -2520,6 +2557,52 @@ const openLoraManager = () => {
 const openHistoryBox = () => {
   // 发送消息给父窗口
   window.parent.postMessage({ type: 'weilin_prompt_ui_openHistoryManager', data: { toggle: true } }, '*')
+}
+
+const openFavoritesBox = () => {
+  // 发送消息给父窗口（收藏夹独立窗口）
+  window.parent.postMessage({ type: 'weilin_prompt_ui_openFavoritesManager', data: { toggle: true } }, '*')
+}
+
+// 快速收藏：弹出名称输入窗（名称由用户决定，预填提示词前 20 字可改），确认后把当前提示词与
+// 已加载的 Lora 存入收藏夹（方案 A {prompt, lora} 格式）；成功后广播刷新消息，收藏夹窗口若开着会自动刷新
+const showQuickFavDialog = ref(false)
+const quickFavName = ref('')
+const quickFavorite = () => {
+  const text = (inputText.value || '').trim()
+  if (!text) {
+    message({ type: 'warn', str: 'message.quickFavoriteEmpty' })
+    return
+  }
+  quickFavName.value = text.length > 20 ? text.slice(0, 20) + '…' : text
+  showQuickFavDialog.value = true
+}
+const confirmQuickFavorite = () => {
+  const name = (quickFavName.value || '').trim()
+  if (!name) {
+    message({ type: 'warn', str: 'message.quickFavoriteNameRequired' })
+    return
+  }
+  const text = (inputText.value || '').trim()
+  const tagJson = JSON.stringify({
+    prompt: text,
+    lora: selectedLoras.value.length > 0 ? selectedLoras.value : ''
+  })
+  historyApi
+    .addFavorite({ name: name, tag: tagJson, color: '' })
+    .then((res) => {
+      // 后端去重：tag 完全一致的收藏已存在时不重复插入，返回 existed 标记
+      if (res && res.data && res.data.existed) {
+        message({ type: 'warn', str: 'message.addFavoriteIsExist' })
+      } else {
+        message({ type: 'success', str: 'message.addFavoriteSuccess' })
+      }
+      window.postMessage({ type: 'weilin_prompt_ui_refresh_all_data' }, '*')
+      showQuickFavDialog.value = false
+    })
+    .catch(() => {
+      message({ type: 'warn', str: 'message.networkError' })
+    })
 }
 
 // 添加折叠状态控制
@@ -3039,6 +3122,26 @@ const copySelectedTokens = () => {
   closeSelectionActions()
 }
 
+// 收藏选中的标签到标签管理器：拼接文本后打开标签收藏对话框（与单标签收藏按钮同链路，
+// favourItemRef.open(text, translate) → 选择分组保存）；有翻译的标签带上翻译，全无翻译传空串
+const favoriteSelectedTokens = () => {
+  if (selectedTokens.value.length === 0) return
+
+  // 按顺序获取选中标签的文本与翻译（与复制按钮相同的拼接口径）
+  const sortedIndices = [...selectedTokens.value].sort((a, b) => a - b)
+  const combinedText = sortedIndices.map(index => tokens.value[index].text).join(', ')
+  const combinedTranslate = sortedIndices
+    .map(index => tokens.value[index].translate || '')
+    .filter(t => t)
+    .join(', ')
+
+  // 先关闭菜单清除选中，再弹出标签收藏对话框（避免浮窗与对话框同屏叠加）
+  closeSelectionActions()
+  if (favourItemRef.value) {
+    favourItemRef.value.open(combinedText, combinedTranslate)
+  }
+}
+
 // 禁用选中的标签
 const disableSelectedTokens = () => {
   if (selectedTokens.value.length === 0) return
@@ -3505,43 +3608,82 @@ const onBlur = () => {
 const AUTOCOMPLETE_DEBOUNCE_MS = 150
 const AUTOCOMPLETE_CACHE_MAX = 100
 const AUTOCOMPLETE_EMBEDDING_MAX = 50 // embeddings 过滤结果的展示上限
+const AUTOCOMPLETE_EMBEDDING_MIX_MAX = 10 // 普通输入混入 embedding 候选的上限
 let autocompleteDebounceTimer = null
 let autocompleteRequestSeq = 0 // 请求序号，用于丢弃过期响应
 const autocompleteCache = new Map() // query -> results
 
 // ===== embeddings 补全 =====
-// 数据源为 ComfyUI 原生 /api/embeddings（/embeddings 可能被第三方扩展的页面路由占用，勿用）。
+// 数据源主用插件自身端点 get_embeddings_list（与标签库接口同链路，可达性与 tag 补全一致），
+// 失败时回退 ComfyUI 原生 /api/embeddings（/embeddings 可能被第三方扩展的页面路由占用，勿用）。
 // 返回带子目录的完整名字（如 "123/anna1"），原样插入即与后端 folder_paths 列表精确匹配。
 let embeddingsListCache = null
+let embeddingsFetchFailedAt = 0 // 失败冷却：30s 内不重试，避免失败被永久缓存为空列表后每次输入都静默失败
 const fetchEmbeddingsList = async () => {
-  if (embeddingsListCache) return embeddingsListCache
+  if (embeddingsListCache !== null) return embeddingsListCache
+  if (Date.now() - embeddingsFetchFailedAt < 30000) return []
   try {
-    const res = await fetch('/api/embeddings')
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    const list = await res.json()
-    embeddingsListCache = Array.isArray(list) ? list.filter(n => typeof n === 'string') : []
+    let list = null
+    try {
+      const res = await autocompleteApi.getEmbeddingsList()
+      list = Array.isArray(res.data) ? res.data : null
+    } catch (e) {
+      console.warn('[WeiLin] 插件端点获取 embeddings 失败，回退原生 /api/embeddings:', e)
+    }
+    if (list === null) {
+      const res = await fetch('/api/embeddings')
+      if (!res.ok) throw new Error('HTTP ' + res.status)
+      const raw = await res.json()
+      list = Array.isArray(raw) ? raw : []
+    }
+    embeddingsListCache = list.filter(n => typeof n === 'string')
+    if (embeddingsListCache.length === 0) {
+      console.warn('[WeiLin] embeddings 列表为空——请确认 ComfyUI 的 models/embeddings 目录非空')
+    }
   } catch (e) {
     console.warn('[WeiLin] 获取 embeddings 列表失败:', e);
-    embeddingsListCache = []
+    embeddingsFetchFailedAt = Date.now()
+    return []
   }
   return embeddingsListCache
 }
 
-// 输入 embedding: 前缀时本地过滤 embeddings 列表（不发 tag 请求，无需防抖）
-const buildEmbeddingAutocomplete = async (rawWord) => {
-  const prefixLen = 'embedding:'.length
-  const filter = rawWord.slice(prefixLen).trim().toLowerCase()
+// 输入 embedding:（兼容全角冒号 embedding：）时本地过滤 embeddings 列表（不发 tag 请求，无需防抖）
+// 比对统一用正斜杠归一化（列表原名带反斜杠子目录如 "123\anna1"），插入保留原名
+const buildEmbeddingAutocomplete = async (filter) => {
   const list = await fetchEmbeddingsList()
   const matched = list
-    .filter(name => name.toLowerCase().includes(filter))
+    .filter(name => name.replace(/\\/g, '/').toLowerCase().includes(filter))
     .slice(0, AUTOCOMPLETE_EMBEDDING_MAX)
     .map(name => ({ text: 'embedding:' + name, desc: 'embedding', isEmbedding: true }))
   await applyAutocompleteResults(matched)
 }
 
+// 普通输入混入 embeddings 候选：tag 库结果尾部附加包含输入词的 embedding（同款过滤/映射）
+const buildEmbeddingTail = async (lowerQuery) => {
+  const list = await fetchEmbeddingsList()
+  return list
+    .filter(name => name.replace(/\\/g, '/').toLowerCase().includes(lowerQuery))
+    .slice(0, AUTOCOMPLETE_EMBEDDING_MIX_MAX)
+    .map(name => ({ text: 'embedding:' + name, desc: 'embedding', isEmbedding: true }))
+}
+
+
+// 去重（74.23）：按候选文本小写归一化，保留首个出现——tag 结果在前、embedding 尾附在后
+// 的顺序不变；标签库重复条目 / 大小写变体只展示一次
+const dedupeAutocompleteResults = (results) => {
+  const seen = new Set();
+  return (results || []).filter(item => {
+    if (!item || !item.text) return false;
+    const key = String(item.text).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 const applyAutocompleteResults = async (results) => {
-  autocompleteResults.value = results || []
+  autocompleteResults.value = dedupeAutocompleteResults(results);
   await calculateAutocompletePosition();
   saveAutoCompleteWidth.value = localStorage.getItem('weilin_prompt_ui_auto_box_width') || 450
   saveAutoCompleteHeight.value = localStorage.getItem('weilin_prompt_ui_auto_box_height') || 350
@@ -3553,15 +3695,22 @@ const triggerAutocomplete = (inputValue) => {
   // 处理特殊格式 - 移除了圆括号
   let cleanedTrSegment = inputValue.replace(/[\[\]{}]/g, '').trim();
 
-  // embedding: 前缀检测必须在 extractText 之前：
+  // embedding 前缀检测必须在 extractText 之前：
   // extractText 会把 "embedding:123\anna1"（冒号后跟数字）误判为权重语法并截掉冒号后的内容
-  if (cleanedTrSegment && cleanedTrSegment.toLowerCase().startsWith('embedding:')) {
+  // 兼容全角冒号（embedding：），中文输入法下冒号易被打成全角导致前缀检测失败；
+  // 裸词 "embedding"（还没打冒号）也直接列出 embedding 候选，不必等冒号敲下
+  // 裸词修复（74.22）：旧正则要求整段恰等于 "embedding" 才命中——裸词弹出的全量列表
+  // 在继续输入名字第一个字符后（embeddingXxx）立刻失配掉回 tag 路径，列表被替换，
+  // 实际上仍必须打冒号才能筛选。现放宽为 "embedding" 前缀 + 可选冒号 + 任意后缀，
+  // 裸词后续输入持续按后缀过滤 embedding 列表
+  const embeddingPrefixMatch = cleanedTrSegment.match(/^embedding[:：]?(.*)$/i);
+  if (embeddingPrefixMatch) {
     if (autocompleteDebounceTimer) {
       clearTimeout(autocompleteDebounceTimer);
       autocompleteDebounceTimer = null;
     }
     autocompleteRequestSeq++; // 作废在途的 tag 补全请求
-    buildEmbeddingAutocomplete(cleanedTrSegment);
+    buildEmbeddingAutocomplete((embeddingPrefixMatch[1] || '').trim().toLowerCase());
     return;
   }
 
@@ -3601,13 +3750,17 @@ const triggerAutocomplete = (inputValue) => {
       const res = await autocompleteApi.getAutocomplete(String(lowerInput));
       if (seq !== autocompleteRequestSeq) return; // 过期响应，丢弃
       const results = res.data || [];
+      // 混入 embedding 候选（普通输入也能看到 embedding；缓存同存合并结果，命中缓存时行为一致）
+      const embeddingTail = await buildEmbeddingTail(lowerInput);
+      if (seq !== autocompleteRequestSeq) return; // 二次检查（fetch 缓存未命中时 await 有窗口）
+      const mergedResults = results.concat(embeddingTail);
       // 写入缓存（超容量时淘汰最早的条目）
       if (autocompleteCache.size >= AUTOCOMPLETE_CACHE_MAX) {
         const firstKey = autocompleteCache.keys().next().value;
         autocompleteCache.delete(firstKey);
       }
-      autocompleteCache.set(lowerInput, results);
-      await applyAutocompleteResults(results);
+      autocompleteCache.set(lowerInput, mergedResults);
+      await applyAutocompleteResults(mergedResults);
     } catch (error) {
       console.error('Autocomplete error:', error);
       if (seq === autocompleteRequestSeq) {

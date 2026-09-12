@@ -128,7 +128,7 @@ const isDetailOpen = ref(false);
 
 // 打开Lora管理器
 const openLoraManager = () => {
-    window.postMessage({ type: 'weilin_prompt_ui_openLoraManager_addLora_stack', seed: seed.value }, '*')
+    window.postMessage({ type: 'weilin_prompt_ui_openLoraManager_addLora_stack', seed: seed.value, data: {} }, '*')
 }
 
 // 添加切换隐藏状态的方法

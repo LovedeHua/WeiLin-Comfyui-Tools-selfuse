@@ -5,7 +5,7 @@
       :title="promptManager === 'prompt' ? t('promptBox.windowTitle') : t('promptBox.windowTitleGlobal')"
       :position="windows.prompt.position" :size="windows.prompt.size" :z-index="windowManager.getZIndex('promptBox')"
       @update:position="updatePosition('prompt', $event)" @update:size="updateSize('prompt', $event)"
-      @active="windowManager.setActiveWindow('promptBox')" @close="closeWindow('prompt')">
+ @close="closeWindow('prompt')">
       <PromptBox :promptManager="promptManager" :hasPromptLoraStack="hasPromptLoraStack" ref="promptBoxRef" />
     </DraggableWindow>
 
@@ -13,7 +13,7 @@
     <DraggableWindow name="tagManager" v-if="windows.tag.visible" :title="t('tagManager.windowTitle')"
       :position="windows.tag.position" :size="windows.tag.size" :z-index="windowManager.getZIndex('tagManager')"
       @update:position="updatePosition('tag', $event)" @update:size="updateSize('tag', $event)"
-      @active="windowManager.setActiveWindow('tagManager')" @close="closeWindow('tag')">
+ @close="closeWindow('tag')">
       <TagManager :tagManager="tagManager" />
     </DraggableWindow>
 
@@ -21,7 +21,7 @@
     <DraggableWindow name="loraManager" v-if="windows.lora.visible" :title="t('loraManager.windowTitle')"
       :position="windows.lora.position" :size="windows.lora.size" :z-index="windowManager.getZIndex('loraManager')"
       @update:position="updatePosition('lora', $event)" @update:size="updateSize('lora', $event)"
-      @active="windowManager.setActiveWindow('loraManager')" @close="closeWindow('lora')">
+ @close="closeWindow('lora')">
       <LoraManager :loraManager="loraManager" ref="loraManagerRef" />
     </DraggableWindow>
 
@@ -29,15 +29,24 @@
     <DraggableWindow name="historyManager" v-if="windows.history.visible" :title="t('history.windowTitle')"
       :position="windows.history.position" :size="windows.history.size" :z-index="windowManager.getZIndex('historyManager')"
       @update:position="updatePosition('history', $event)" @update:size="updateSize('history', $event)"
-      @active="windowManager.setActiveWindow('historyManager')" @close="closeWindow('history')">
+ @close="closeWindow('history')">
       <HistoryManager />
+    </DraggableWindow>
+
+    <!-- 收藏夹窗口（从历史记录窗口独立出来） -->
+    <DraggableWindow name="favoritesManager" v-if="windows.favorites.visible" :title="t('history.favorites')"
+      :position="windows.favorites.position" :size="windows.favorites.size"
+      :z-index="windowManager.getZIndex('favoritesManager')"
+      @update:position="updatePosition('favorites', $event)" @update:size="updateSize('favorites', $event)"
+ @close="closeWindow('favorites')">
+      <FavoritesManager />
     </DraggableWindow>
 
     <!-- AI窗口 -->
     <DraggableWindow name="aiWindow" v-if="windows.ai_window.visible" :title="t('aiWindow.windowTitle')"
       :position="windows.ai_window.position" :size="windows.ai_window.size"
       :z-index="windowManager.getZIndex('aiWindow')" @update:position="updatePosition('ai_window', $event)"
-      @update:size="updateSize('ai_window', $event)" @active="windowManager.setActiveWindow('aiWindow')"
+      @update:size="updateSize('ai_window', $event)"
       @close="closeWindow('ai_window')">
       <AiWindow />
     </DraggableWindow>
@@ -47,7 +56,7 @@
       :title="t('nodeListWindow.windowTitle')" :position="windows.node_list_window.position"
       :size="windows.node_list_window.size" :z-index="windowManager.getZIndex('nodeListWindow')"
       @update:position="updatePosition('node_list_window', $event)"
-      @update:size="updateSize('node_list_window', $event)" @active="windowManager.setActiveWindow('nodeListWindow')"
+      @update:size="updateSize('node_list_window', $event)"
       @close="closeWindow('node_list_window')">
       <NodeListWindow />
     </DraggableWindow>
@@ -56,7 +65,7 @@
     <DraggableWindow name="cloudWindow" v-if="windows.cloud_window.visible" :title="t('cloudWindow.windowTitle')"
       :position="windows.cloud_window.position" :size="windows.cloud_window.size"
       :z-index="windowManager.getZIndex('cloudWindow')" @update:position="updatePosition('cloud_window', $event)"
-      @update:size="updateSize('cloud_window', $event)" @active="windowManager.setActiveWindow('cloudWindow')"
+      @update:size="updateSize('cloud_window', $event)"
       @close="closeWindow('cloud_window')">
       <CloudWindow />
     </DraggableWindow>
@@ -67,7 +76,7 @@
       :z-index="windowManager.getZIndex('loraStackWindow')"
       @update:position="updatePosition('lora_stack_window', $event)"
       @update:size="updateSize('lora_stack_window', $event)"
-      @active="windowManager.setActiveWindow('loraStackWindow')" @close="closeWindow('lora_stack_window')">
+ @close="closeWindow('lora_stack_window')">
       <LoraStackWindow ref="loraStackRef" />
     </DraggableWindow>
 
@@ -77,7 +86,6 @@
       :size="windows.danbooru_manager_window.size" :z-index="windowManager.getZIndex('DanbooruManagerWindow')"
       @update:position="updatePosition('danbooru_manager_window', $event)"
       @update:size="updateSize('danbooru_manager_window', $event)"
-      @active="windowManager.setActiveWindow('DanbooruManagerWindow')"
       @close="closeWindow('danbooru_manager_window')">
       <DanbooruManagerWindow ref="danbooruManagerRef" />
     </DraggableWindow>
@@ -110,6 +118,7 @@ import PromptBox from './view/prompt_box/prompt_index.vue'
 import TagManager from './view/tag_manager/tag_index.vue'
 import LoraManager from './view/lora_manager/lora_index.vue'
 import HistoryManager from './view/history_manager/history_index.vue'
+import FavoritesManager from './view/favorites_manager/favorites_index.vue'
 import { windowManager } from '@/utils/windowManager'
 import FloatingBall from '@/components/FloatingBall.vue';
 import { useTagStore } from '@/stores/tagStore';
@@ -231,6 +240,12 @@ const DEFAULT_WINDOWS = {
     visible: false,
     is_default_close: false,
     position: { x: 300, y: 300 },
+    size: { width: 800, height: 600 }
+  },
+  favorites: {
+    visible: false,
+    is_default_close: false,
+    position: { x: 360, y: 240 },
     size: { width: 800, height: 600 }
   },
   ai_window: {
@@ -745,6 +760,12 @@ const restoreWindowsToDefault = () => {
       position: { x: 300, y: 300 },
       size: { width: 800, height: 600 }
     },
+    favorites: {
+      visible: false,
+      is_default_close: false,
+      position: { x: 360, y: 240 },
+      size: { width: 800, height: 600 }
+    },
     ai_window: {
       visible: false,
       is_default_close: false,
@@ -807,7 +828,9 @@ const openOrToggleWindow = (msgData, win, wmKey) => {
     win.visible = false
   } else {
     win.visible = true
-    windowManager.setActiveWindow(wmKey)
+    // from=入口宿主窗口：抵消点击入口按钮时 mousedown 对宿主的隐式激活上浮，
+    // 避免"打开新窗口"压低其他已打开窗口的层级（如 prompt>history 顺序翻转）
+    windowManager.openWindowOnTop(wmKey)
   }
 }
 
@@ -817,7 +840,7 @@ const handleMessage = (event) => {
   if (event.data.type === 'weilin_prompt_ui_openTagManager') {
     tagManager.value = 'manager'
     windows.value.tag.visible = true
-    windowManager.setActiveWindow('tagManager')
+    windowManager.openWindowOnTop('tagManager')
   } else if (event.data.type === 'weilin_prompt_ui_openTagManager_prompt') {
     tagManager.value = 'prompt'
     openOrToggleWindow(event.data, windows.value.tag, 'tagManager')
@@ -834,7 +857,7 @@ const handleMessage = (event) => {
     nextTick(() => {
       promptBoxRef.value.setPromptText(event.data.prompt)
     })
-    windowManager.setActiveWindow('promptBox')
+    windowManager.openWindowOnTop('promptBox')
 
   } else if (event.data.type === 'weilin_prompt_ui_openLoraManager') {
     loraManager.value = 'look'
@@ -845,39 +868,41 @@ const handleMessage = (event) => {
     nextTick(() => {
       loraManagerRef.value.openSetSeed(0, "")
     })
-    windowManager.setActiveWindow('loraManager')
+    windowManager.openWindowOnTop('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_openLoraManager_addLora_stack') {
     loraManager.value = 'addLora'
     windows.value.lora.visible = true
     nextTick(() => {
       loraManagerRef.value.openSetSeed(1, event.data.seed)
     })
-    windowManager.setActiveWindow('loraManager')
+    windowManager.openWindowOnTop('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_openLoraManager_addLora_stack_node') {
     loraManager.value = 'addLora'
     windows.value.lora.visible = true
     nextTick(() => {
       loraManagerRef.value.openSetSeed(2, event.data.seed)
     })
-    windowManager.setActiveWindow('loraManager')
+    windowManager.openWindowOnTop('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_openHistoryManager') {
     openOrToggleWindow(event.data, windows.value.history, 'historyManager')
+  } else if (event.data.type === 'weilin_prompt_ui_openFavoritesManager') {
+    openOrToggleWindow(event.data, windows.value.favorites, 'favoritesManager')
   } else if (event.data.type === 'weilin_prompt_ui_openAiWindow') {
     openOrToggleWindow(event.data, windows.value.ai_window, 'aiWindow')
   } else if (event.data.type === 'weilin_prompt_ui_open_node_list_window') {
     windows.value.node_list_window.visible = true
-    windowManager.setActiveWindow('nodeListWindow')
+    windowManager.openWindowOnTop('nodeListWindow')
 
   } else if (event.data.type === 'weilin_prompt_ui_node_executed_save_history') {
     // 节点执行完成：把该节点的提示词存入历史（多节点工作流各自入史，服务端按内容去重）
+    // 74.29：对齐收藏夹 73 轮——只存 {prompt, lora}；temp_prompt/temp_lora 恒为空属无用数据，
+    // 消费端 setPromptText 对缺失字段均有兜底，旧数据（带 temp_*）读取不受影响
     const executedPrompt = typeof event.data.prompt === 'string' ? event.data.prompt : ''
     if (executedPrompt.replace(/\s/g, '').length > 0) {
       historyApi.saveHistory({
         tag: JSON.stringify({
           prompt: executedPrompt,
-          lora: event.data.lora || "",
-          temp_prompt: [],
-          temp_lora: ""
+          lora: event.data.lora || ""
         })
       }).catch((err) => {
         // 保存失败不能完全静默：否则该节点会被遗漏且无从排查
@@ -897,15 +922,15 @@ const handleMessage = (event) => {
     nextTick(() => {
       promptBoxRef.value.setPromptText(globalPrompt.value)
     })
-    windowManager.setActiveWindow('promptBox')
+    windowManager.openWindowOnTop('promptBox')
   } else if (event.data.type === 'weilin_prompt_ui_open_global_tag_manager') {
     tagManager.value = 'manager'
     windows.value.tag.visible = true
-    windowManager.setActiveWindow('tagManager')
+    windowManager.openWindowOnTop('tagManager')
   } else if (event.data.type === 'weilin_prompt_ui_open_global_lora_manager') {
     loraManager.value = 'look'
     windows.value.lora.visible = true
-    windowManager.setActiveWindow('loraManager')
+    windowManager.openWindowOnTop('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_prompt_update_prompt_global') {
     globalPrompt.value = event.data.data
   } else if (event.data.type === 'weilin_prompt_ui_floating_ball_setting') {
@@ -919,7 +944,7 @@ const handleMessage = (event) => {
     nextTick(() => {
       loraStackRef.value.initLoraStack(event.data.prompt, event.data.seed)
     })
-    windowManager.setActiveWindow('loraStackWindow')
+    windowManager.openWindowOnTop('loraStackWindow')
   } else if (event.data.type === "weilin_prompt_ui_openLoraDetail") {
     loraDetailLoraStackRef.value.open({ name: event.data.lora })
 

@@ -349,6 +349,12 @@
                 {{ t('promptBox.settings.enableBracketEscape') }}
               </label>
             </div>
+            <div class="weilin-comfyui-setting-item">
+              <label>
+                <input type="checkbox" v-model="isTagTipsEnabled" />
+                {{ t('promptBox.settings.enableTagTips') }}
+              </label>
+            </div>
             <button class="weilin-comfyui-save-button" @click="savePromptBoxSettings">
               {{ t('promptBox.settings.save') }}
             </button>
@@ -501,6 +507,7 @@ const isAngleBracketConversionEnabled = ref(localStorage.getItem('weilin_prompt_
 const isUnderscoreToBracketEnabled = ref(localStorage.getItem('weilin_prompt_ui_underscore_to_bracket') === 'true');
 const isCommaCloseAutocompleteEnabled = ref(localStorage.getItem('weilin_prompt_ui_comma_close_autocomplete') === 'true');
 const isBracketEscapeEnabled = ref(localStorage.getItem('weilin_prompt_ui_bracket_escape') === 'true');
+const isTagTipsEnabled = ref(localStorage.getItem('weilin_prompt_ui_tag_tips') !== 'false');
 
 // 功能开关状态
 const isClearAllEnabled = ref(localStorage.getItem('weilin_function_toggles_clearAll') !== 'false'); // 默认true
@@ -666,6 +673,7 @@ const savePromptBoxSettings = () => {
   localStorage.setItem('weilin_prompt_ui_underscore_to_bracket', isUnderscoreToBracketEnabled.value);
   localStorage.setItem('weilin_prompt_ui_comma_close_autocomplete', isCommaCloseAutocompleteEnabled.value);
   localStorage.setItem('weilin_prompt_ui_bracket_escape', isBracketEscapeEnabled.value);
+  localStorage.setItem('weilin_prompt_ui_tag_tips', isTagTipsEnabled.value);
   message({ type: "success", str: 'message.saveSuccess' });
 };
 
@@ -993,6 +1001,8 @@ const openDialog = () => {
   isAngleBracketConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_angle_bracket_conversion') === 'true';
   isUnderscoreToBracketEnabled.value = localStorage.getItem('weilin_prompt_ui_underscore_to_bracket') === 'true';
   isCommaCloseAutocompleteEnabled.value = localStorage.getItem('weilin_prompt_ui_comma_close_autocomplete') === 'true';
+  isBracketEscapeEnabled.value = localStorage.getItem('weilin_prompt_ui_bracket_escape') === 'true';
+  isTagTipsEnabled.value = localStorage.getItem('weilin_prompt_ui_tag_tips') !== 'false';
 
   dialogVisible.value = true
 }

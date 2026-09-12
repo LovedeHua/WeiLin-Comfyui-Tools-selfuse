@@ -6,7 +6,8 @@ import { ref } from 'vue'
  * 层级模型（栈式）：
  *  - 普通窗口：baseZIndex 起步，按激活顺序递增（后激活的在上）
  *  - 置顶窗口：PINNED_BASE 区间，恒高于所有普通窗口；置顶窗口之间仍按激活顺序
- *  - 点击窗口任意处（DraggableWindow 的 mousedown）即激活并置顶该窗口（智能焦点切换）
+ *  - 点击窗口空白/标题栏/输入框即激活并置顶该窗口（智能焦点切换）；
+ *    点击窗口内按钮不改变层叠（入口按钮打开新窗口时不会压低其他窗口，74.37 重构）
  *  - 新窗口打开（注册）即自动获得焦点并排在普通窗口最上层
  *  - Alt+Q 可在已打开窗口间循环切换焦点（cycleActiveWindow）
  *
@@ -71,6 +72,17 @@ export const windowManager = {
     activeWindow.value = windowName
     stackOrder.value = [...stackOrder.value.filter(n => n !== windowName), windowName]
     recomputeZIndexes()
+  },
+
+  // 打开窗口并置顶（打开类消息处理统一入口）：未打开则注册（新窗口排在普通窗最上层），
+  // 已打开则激活置顶。层叠正确性由 DraggableWindow 的一条规则保证——点击窗口内按钮
+  // 不隐式激活宿主窗口，因此打开任何窗口都不会压低其他已打开窗口，无需"回退上次激活"补偿
+  openWindowOnTop(windowName) {
+    if (!stackOrder.value.includes(windowName)) {
+      this.registerWindow(windowName)
+    } else {
+      this.setActiveWindow(windowName)
+    }
   },
 
   // 获取窗口的 z-index（模板中调用，读取 ref 保证响应式）

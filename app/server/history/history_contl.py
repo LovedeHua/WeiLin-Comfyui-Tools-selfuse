@@ -5,17 +5,24 @@ from ..user_init.user_init import get_history_limit_setting
 
 
 def _history_dedup_key(tag_str):
-    """从保存的 tag JSON 中提取语义去重键 (prompt + lora)。
+    """从保存的 tag JSON 中提取语义去重键 (归一化 prompt + lora)。
 
-    前端保存的 tag 是 {prompt, lora, temp_prompt, temp_lora} 的 JSON 串，
-    其中 temp_prompt 里每个 token 带随机 id、temp_lora 带易变字段，
-    同样的提示词两次保存整串 JSON 并不相同——必须按语义键去重。
+    前端保存的 tag 是 {prompt, lora}（74.29 起不再存恒为空的 temp_prompt/temp_lora；
+    旧数据仍带 temp_* 字段，读取时忽略）的 JSON 串，按语义键去重。
     解析失败（旧数据/非 JSON）时退化为原文匹配。
+
+    74.29：prompt 做空白归一化（连续空白压为单空格、去首尾）。
+    实证：带动态语法的模板反复执行/微调时，残留的行尾换行、双空格等
+    无意义空白差异会让全文精确匹配绕过去重，同一模板堆积多条历史；
+    归一化后仅空白不同的 prompt 视为同一条（刷新置顶）。
+    DP 语法（{a|b|c}/__wildcard__）保留原文参与键：模板相同即同一条，
+    每次展开结果不同不影响去重。
     """
     try:
         obj = json.loads(tag_str)
         if isinstance(obj, dict):
             prompt = obj.get('prompt', '') or ''
+            prompt = ' '.join(prompt.split())
             lora = obj.get('lora', '')
             try:
                 lora_str = json.dumps(lora, ensure_ascii=False, sort_keys=True)

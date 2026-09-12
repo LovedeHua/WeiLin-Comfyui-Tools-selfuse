@@ -21,8 +21,11 @@ def _is_network_available():
       if time.time() - last_check_time < 300:
         return last_result
     
-    response = requests.get('https://civitai.red/api/v1/models', timeout=(3, 5))
+    # stream=True：拿到响应头即判定连通，不等 models 全量响应体（避免读超时误判离线）；
+    # 连接超时 2 秒——civitai 连不上时最多阻塞 2 秒而非更久
+    response = requests.get('https://civitai.red/api/v1/models', timeout=(2, 4), stream=True)
     result = response.status_code == 200
+    response.close()
     
     _is_network_available._last_check = (time.time(), result)
     return result
@@ -275,16 +278,29 @@ async def get_model_info(file: str,
 
   should_save = _update_data(info_data) or should_save
 
-  if local_info_exists and not force_fetch_civitai and not force_fetch_metadata:
-    maybe_fetch_civitai = False
-    maybe_fetch_metadata = False
+  # （原"本地 info 文件存在即跳过 maybe 拉取"的短路已删除：下方 need_* 已按 raw 缓存
+  #  逐项判定，旧短路会阻止"文件存在但 civitai/metadata 缺失"的 lora 被异步补全；
+  #  删除后保存字段等端点也会在缓存缺失时顺带回填）
 
-  network_available = await asyncio.to_thread(_is_network_available)
-  
-  should_fetch_civitai = force_fetch_civitai is True or (maybe_fetch_civitai is True and network_available and
-                                                         ('civitai' not in info_data['raw'] or len(info_data['raw']['civitai']) == 0))
-  should_fetch_metadata = force_fetch_metadata is True or (maybe_fetch_metadata is True and network_available and
-                                                           ('metadata' not in info_data['raw'] or len(info_data['raw']['metadata']) == 0))
+  # 惰性网络检测：先按"缓存是否已有数据"判定是否需要联网，仅在有联网需求时才做
+  # civitai 连通性检测。本地 info 齐全的 lora 完全跳过检测——civitai 连不上
+  # （检测要等 TCP 超时数秒）不再拖慢本地预览的加载。
+  need_civitai_fetch = force_fetch_civitai is True or (
+      maybe_fetch_civitai is True and
+      ('civitai' not in info_data['raw'] or len(info_data['raw']['civitai']) == 0))
+  need_metadata_fetch = force_fetch_metadata is True or (
+      maybe_fetch_metadata is True and
+      ('metadata' not in info_data['raw'] or len(info_data['raw']['metadata']) == 0))
+
+  network_available = None  # None=尚未检测（惰性），True/False=检测结果
+  # 网络探测仅 civitai 需要；metadata 是本地 safetensors 头读取，不触发探测
+  if need_civitai_fetch:
+    network_available = await asyncio.to_thread(_is_network_available)
+
+  should_fetch_civitai = need_civitai_fetch and (
+      force_fetch_civitai is True or network_available is True)
+  # metadata 不依赖网络：force 或（maybe 且缓存缺失）即读本地
+  should_fetch_metadata = need_metadata_fetch
 
   if should_fetch_metadata:
     # 阻塞的网络/文件 IO 移入线程池，避免冻结事件循环
@@ -336,11 +352,15 @@ async def get_model_info(file: str,
       if url is None and isinstance(first_img, dict):
         url = first_img.get('url')
       
-      if url and isinstance(url, str) and url.startswith('http') and network_available:
-        await asyncio.to_thread(download_image,
-                                url=url,
-                                filename=file_name,
-                                directory=os.path.dirname(file_path))
+      if url and isinstance(url, str) and url.startswith('http'):
+        # 惰性检测：仅真正需要下载封面时才探测网络
+        if network_available is None:
+          network_available = await asyncio.to_thread(_is_network_available)
+        if network_available:
+          await asyncio.to_thread(download_image,
+                                  url=url,
+                                  filename=file_name,
+                                  directory=os.path.dirname(file_path))
 
   if should_save:
     if 'trainedWords' in info_data:

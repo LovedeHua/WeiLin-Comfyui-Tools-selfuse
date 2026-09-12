@@ -107,4 +107,12 @@ export const loraApi = {
       data:{ search }
     })
   },
-} 
+  // 批量检查 Lora 路径是否存在于 loras 目录（names: 路径数组 → {路径: bool}）
+  checkLoraExists: async (names) => {
+    return await request({
+      url: '/check_lora_exists',
+      method: 'post',
+      data:{ names }
+    })
+  },
+}

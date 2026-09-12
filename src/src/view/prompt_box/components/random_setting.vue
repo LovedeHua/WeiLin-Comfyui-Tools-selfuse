@@ -2,8 +2,7 @@
     <DraggableWindow v-if="isOpen" name="randomRuleSetting" :title="t('randomUtils.title')" :position="windows.randomRuleSetting.position"
         :size="windows.randomRuleSetting.size" :z-index="windowManager.getZIndex('randomRuleSetting')"
         @update:position="updatePosition('randomRuleSetting', $event)"
-        @update:size="updateSize('randomRuleSetting', $event)"
-        @active="windowManager.setActiveWindow('randomRuleSetting')" @close="closeWindow('randomRuleSetting')">
+        @update:size="updateSize('randomRuleSetting', $event)" @close="closeWindow('randomRuleSetting')">
         <template #default>
             <div class="random-rule-container">
                 <!-- 规则模板设置 -->

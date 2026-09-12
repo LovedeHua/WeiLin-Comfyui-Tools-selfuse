@@ -200,7 +200,7 @@ const handleEnterLeave = () => {
 
 // 打开Lora管理器
 const openLoraManager = () => {
-  window.postMessage({ type: 'weilin_prompt_ui_openLoraManager_addLora' }, '*')
+  window.postMessage({ type: 'weilin_prompt_ui_openLoraManager_addLora', data: {} }, '*')
 }
 
 // 添加切换隐藏状态的方法

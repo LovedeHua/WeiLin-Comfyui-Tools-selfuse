@@ -128,15 +128,41 @@ def get_lora_folder():
 async def search_lora_files(query):
     all_files = folder_paths.get_filename_list("loras")
     results = []
-    
+
     query = query.lower()
-    
+
     for file_path in all_files:
         file_name = os.path.basename(file_path)
         if query in file_name.lower():
             results.append(file_path)
-    
+
     return results
+
+def check_lora_files_exist(names):
+    """批量检查 Lora 路径是否在 loras 目录列表中（正反斜杠归一化后比对）。
+    兼容不带文件后缀的名字：带后缀精确匹配完整文件名；无后缀名与"去扩展名路径集合"
+    直接比对，或去掉扩展名后比对。三重判定覆盖：带后缀精确命中、无后缀命中（含文件名
+    本身带点的场景，如 "xxx_alpha16.0_rank32"——splitext 会把 16.0 的点当扩展名截断，
+    所以必须有无后缀直比这一路，避免把这类名字误判为文件不存在）。
+    用于收藏跟随 Lora 的存在性检测：文件被移动/删除/改名后旧收藏能标出失效项。"""
+    try:
+        all_files = folder_paths.get_filename_list("loras")
+    except Exception as e:
+        print(f"[WeiLin] 检查Lora存在性失败: {e}")
+        return {}
+    full_set = set()
+    noext_set = set()
+    for p in all_files:
+        if isinstance(p, str) and p:
+            norm = p.replace('\\', '/')
+            full_set.add(norm)
+            noext_set.add(os.path.splitext(norm)[0])
+    result = {}
+    for n in names:
+        if isinstance(n, str) and n:
+            norm = n.replace('\\', '/')
+            result[n] = norm in full_set or norm in noext_set or os.path.splitext(norm)[0] in noext_set
+    return result
 
 async def get_rang_for_extra_networks(arr=[]):
     return_response = {"loras": []}

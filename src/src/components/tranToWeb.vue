@@ -1,8 +1,7 @@
 <template>
     <DraggableWindow v-if="isOpen" name="tranToWeb" :title="t('utils.tranToWeb')" :position="windows.tranToWeb.position"
         :size="windows.tranToWeb.size" :z-index="windowManager.getZIndex('tranToWeb')"
-        @update:position="updatePosition('tranToWeb', $event)" @update:size="updateSize('tranToWeb', $event)"
-        @active="windowManager.setActiveWindow('tranToWeb')" @close="closeWindow('tranToWeb')">
+        @update:position="updatePosition('tranToWeb', $event)" @update:size="updateSize('tranToWeb', $event)" @close="closeWindow('tranToWeb')">
         <template #default>
             <div class="utils_tran_web__content" 
                  @dragover.prevent="handleDragOver"
