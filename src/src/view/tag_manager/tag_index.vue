@@ -2231,7 +2231,8 @@ const resetTabSizeConfig = () => {
   display: flex;
   flex-direction: column;
   padding: 0 16px 16px 16px;
-  background: var(--weilin-prompt-ui-primary-bg);
+  /* 窗口底色由 DraggableWindow 根统一画一层（rgba 调色板下多层叠加会变实心） */
+  background: transparent;
   height: 100%;
   box-sizing: border-box;
 }

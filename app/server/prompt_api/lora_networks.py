@@ -210,7 +210,9 @@ async def get_extra_networks(auto_fetch=False):
     return_response["loras"] = items
     return return_response
 
-def preview_file(filename: str):
+def preview_file(filename: str, video_as_url: bool = False):
+    """读取 Lora 本地封面：图片返回缩略 base64；视频默认 base64（<2MB），video_as_url=True 时
+    一律返回流式 URL（批量预查场景避免多个视频 base64 撑爆响应体）。"""
     preview_exts = [".jpg", ".png", ".jpeg", ".gif", ".webp", ".mp4"]
     preview_exts = [*preview_exts, *[".preview" + x for x in preview_exts]]
     for ext in preview_exts:
@@ -221,27 +223,29 @@ def preview_file(filename: str):
                     file_size = os.path.getsize(pathStr)
                     MAX_BASE64_SIZE = 2 * 1024 * 1024
 
+                    import urllib.parse
+                    rel_path = None
+                    for model_dir in folder_paths.get_folder_paths("loras"):
+                        if pathStr.startswith(model_dir):
+                            rel_path = pathStr[len(model_dir):].lstrip(os.sep).replace(os.sep, "/")
+                            break
+                    if rel_path and (video_as_url or file_size >= MAX_BASE64_SIZE):
+                        import time
+                        mtime = int(os.path.getmtime(pathStr))
+                        return f"/weilin/prompt_ui/api/lorainfo/api/loras/img?file={urllib.parse.quote(rel_path, safe='')}&fmt=mp4&t={mtime}"
+
                     if file_size < MAX_BASE64_SIZE:
                         with open(pathStr, "rb") as f:
                             video_bytes = f.read()
                         video_base64 = base64.b64encode(video_bytes).decode()
                         return f"data:video/mp4;base64,{video_base64}"
                     else:
-                        import urllib.parse
-                        rel_path = None
-                        for model_dir in folder_paths.get_folder_paths("loras"):
-                            if pathStr.startswith(model_dir):
-                                rel_path = pathStr[len(model_dir):].lstrip(os.sep).replace(os.sep, "/")
-                                break
-                        if rel_path:
-                            return f"/weilin/prompt_ui/api/lorainfo/api/loras/img?file={urllib.parse.quote(rel_path, safe='')}&fmt=mp4"
-                        else:
-                            if file_size < 10 * 1024 * 1024:
-                                with open(pathStr, "rb") as f:
-                                    video_bytes = f.read()
-                                video_base64 = base64.b64encode(video_bytes).decode()
-                                return f"data:video/mp4;base64,{video_base64}"
-                            return None
+                        if file_size < 10 * 1024 * 1024:
+                            with open(pathStr, "rb") as f:
+                                video_bytes = f.read()
+                            video_base64 = base64.b64encode(video_bytes).decode()
+                            return f"data:video/mp4;base64,{video_base64}"
+                        return None
                 else:
                     bytes = get_thumbnail_for_image_file(pathStr)
                     img_base64 = base64.b64encode(bytes).decode()
@@ -252,6 +256,56 @@ def preview_file(filename: str):
 
 
 MAX_IMAGE_SIZE = 250
+
+def resolve_lora_path(name):
+    """把 lora 名解析为 loras 目录中的真实相对路径：兼容带后缀 / 无后缀(wlr 标签里的
+    model_name 就是去扩展名后的形式) / 正反斜杠。解析不到时原样返回。"""
+    if not isinstance(name, str) or not name:
+        return name
+    try:
+        all_files = folder_paths.get_filename_list("loras")
+    except Exception as e:
+        print(f"[WeiLin] 解析Lora路径失败: {e}")
+        return name
+    full_map = {}
+    noext_map = {}
+    for p in all_files:
+        if isinstance(p, str) and p:
+            norm = p.replace('\\', '/')
+            full_map[norm] = p
+            noext_map.setdefault(os.path.splitext(norm)[0], p)
+    norm = name.replace('\\', '/')
+    if norm in full_map:
+        return full_map[norm]
+    if norm in noext_map:
+        return noext_map[norm]
+    noext = os.path.splitext(norm)[0]
+    if noext in noext_map:
+        return noext_map[noext]
+    return name
+
+
+def get_lora_previews(names):
+    """批量获取 Lora 本地封面缩略图（base64 data URL），无本地封面返回 None。
+    名字兼容带后缀/无后缀/正反斜杠（与 check_lora_files_exist 同一套归一化与三重判定），
+    用于提示词 wlr 标签的封面缩略图预查。"""
+    result = {}
+    paths = {}
+    for name in names or []:
+        if not isinstance(name, str) or not name:
+            continue
+        # resolve_lora_path 兼容带后缀/无后缀(wlr 标签的 model_name)/正反斜杠
+        matched = resolve_lora_path(name)
+        paths[name] = matched
+        try:
+            full_path = folder_paths.get_full_path("loras", matched)
+            # video_as_url=True：视频封面返回流式 URL，避免批量预查时多个 base64 视频撑爆响应体
+            result[name] = preview_file(full_path, video_as_url=True) if full_path else None
+        except Exception as e:
+            print(f"[WeiLin] 获取Lora封面出错 {name}: {e}")
+            result[name] = None
+    return result, paths
+
 
 def get_thumbnail_for_image_file(file_path):
     try:

@@ -4,7 +4,8 @@
     flex-direction: row;
     box-sizing: border-box;
     overflow: visible;
-    background: var(--weilin-prompt-ui-primary-bg);
+    /* 窗口底色由 DraggableWindow 根统一画一层（rgba 调色板下多层叠加会变实心） */
+    background: transparent;
     transition: width 0.3s ease;
 }
 
@@ -402,6 +403,11 @@
 .token-controls {
     position: fixed;
     transform: translateX(-50%);
+    /* 强制按内容全宽渲染：fixed 的 shrink-to-fit 会被"静态位置到视口右缘"的可用空间压缩
+       （标签靠右时尤其明显），把"模型权重/文本权重"标签挤成一字一行；max-content 下
+       宽度恒定，越界由 clampControlsPosition 平移拉回 */
+    width: max-content;
+    align-items: center;
     background-color: var(--weilin-prompt-ui-primary-bg);
     padding: 6px;
     border: 1px solid var(--weilin-prompt-ui-border-color);
@@ -721,13 +727,104 @@
     margin-top: 1px;
     padding: 6px;
     box-sizing: border-box;
-    max-height: 650px;
-    /* 增大最大高度以容纳2.5行卡片 */
-    min-height: 520px;
-    /* 确保最小高度能显示2.5行 (180px * 2.5 + gap + padding) */
-    overflow: auto;
+    /* 高度不在这里定：内嵌的 lora_index（is-embedded）自己控制根高度——
+       还有数据未加载时撑到窗口内容区剩余空间、全部加载完后收缩到内容高度。
+       任何写死的 height/min-height/max-height 都会在"窗口大/分类条目少"时
+       让底部留出一大块空白（74.80/74.81 两轮教训）。 */
     display: flex;
     flex-direction: column;
+}
+
+/* ===== 74.86 重构：内嵌 Lora 管理器高度 = 纯 CSS flex 分配 ===== */
+/* 74.81-74.85 的五版 JS 测高（视觉 top / 布局偏移 / 一屏法 / 标题锚定）全部废弃：
+   测量值与滚动位置、上方内容高度互相依赖，怎么调都不稳定。
+   现在 Lora 面板展开时整条高度链交给 flexbox：
+   window-content（有确定高）→ prompt-box(100%) → main-content（flex 列）
+   → Lora 分区吃掉剩余全部空间 → 内部列表滚动。
+   窗口拖拽、上方内容增减全部由浏览器布局自动重排，无任何 JS 测量；
+   面板收起（v-show=false）时激活类移除，布局还原为原有滚动流。 */
+.weilin_prompt_ui_prompt-box.weilin-lora-embed-active {
+    /* 保持 row 方向不变：LoraStack 是与 main-content 并排的右侧浮列。
+       只给 prompt-box 确定高度（=window-content 内容区高），row 弹性布局下
+       main-content 默认 stretch 拿到同高，内层即可用 flex 分配。 */
+    height: 100%;
+    overflow: hidden;
+}
+
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    /* 上方内容（提示词框等）总高超出可视区时自己滚，不再把 Lora 面板挤没 */
+    overflow-y: auto;
+}
+
+/* Lora 分区以外的直接子块保持自然高度，不被 flex 压缩 */
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content > :not(.tag-manager-section:last-child) {
+    flex: 0 0 auto;
+}
+
+/* Lora 分区：默认收缩到内容高度（全部加载完时小分类不留白）；
+   :has 命中 is-expand（还有数据未加载）时按份额分配空间。
+   74.87：原先 flex:1 1 auto 只是"吃剩余空间"，上方提示词内容是
+   flex:0 0 auto 不可压缩，内容一多 Lora 就被压到 240px 下限。
+   改为 flex-basis 60%：展开时 Lora 先拿窗口内容区的大头，
+   提示词内容装不下时 main-content 自己滚，不再挤占 Lora 面板。 */
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content > .tag-manager-section:last-child {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    min-height: 240px;
+}
+
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content > .tag-manager-section:last-child:has(.weilin_prompt_ui_lora-manager.is-expand) {
+    flex: 1 1 60%;
+    min-height: 700px;
+}
+
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content > .tag-manager-section:last-child .lora-manager-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* 74.89：Lora 展开后滚动元素从 window-content 换成 main-content（见上方 flex 链），
+   但滚动条样式只定义在 window-content 上 → 展开/收起时滚动条样式跳变。
+   照搬同一套样式（6px / #f1f1f1 / #888 / #555），两种状态外观一致 */
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* 74.90/74.92/74.93：展开态滚动条统一贴窗口边（以收起态为准）。
+   74.92 用 position:relative;right:-16px 把整个 main-content 右移 16px，导致
+   ① 全体内容右移 ② 滚动条被 window-content 的 overflow-x:hidden 裁掉而消失——已废弃。
+   正确做法（74.93）：展开态由全局样式把 window-content 的四边 padding 归零
+   （见 prompt_index.vue 全局 <style> 的 :has 规则），main-content 右缘/上下缘自然落到窗口边，
+   滚动条即与收起态同位，且内容左缘不动、不溢出。
+   window-content 那 16px 间隙改由本规则的 padding 提供——padding 不缩短滚动条轨道，
+   故滚动条仍纵贯全窗口高/贴窗口右缘，文字也不贴边。
+   LoraStack 自带 inline padding-right:16px，不依赖 window-content padding，故无副作用。 */
+.weilin-lora-embed-active > .weilin_prompt_ui_main-content {
+    padding: 16px;
+    box-sizing: border-box;
+    /* 74.95b：展开态 main-content 接管滚动，禁用锚定防 scrollTop 跳变 */
+    overflow-anchor: none;
 }
 
 
@@ -1104,6 +1201,8 @@
 .weight-label {
     font-size: 12px;
     color: var(--weilin-prompt-ui-secondary-text);
+    /* 防止容器被压缩时标签竖排一字一行（双保险：容器已有 width:max-content） */
+    white-space: nowrap;
 }
 
 /* 添加括号按钮样式 */
@@ -1319,8 +1418,10 @@
     padding: 5px;
     background-color: var(--weilin-prompt-ui-background);
     border-radius: 4px;
-    flex-direction: row;
-    align-items: center;
+    /* 2 行排版：模型权重一行、文本权重一行，封面/按钮在两侧——浮窗从 ~500px 窄到 ~360px */
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
 }
 
 .lora-weight-controls .weight-control {
@@ -1341,6 +1442,95 @@
 .lora-weight-controls .weight-label {
     font-size: 12px;
     color: var(--weilin-prompt-ui-secondary-text);
+    white-space: nowrap;
+}
+
+/* 功能按钮容器：普通模式横排（按钮间 4px，替代原 token-controls 的 gap 分隔）；
+   wlr 模式下作为 grid 第 3 行（按钮横排） */
+.controls-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+/* wlr 悬浮栏：权重同步开关（激活态高亮主题色）与启用/禁用按钮 */
+.lora-sync-btn,
+.lora-toggle-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: var(--weilin-prompt-ui-secondary-text);
+    transition: color 0.2s, background 0.2s;
+}
+
+.lora-sync-btn:hover,
+.lora-toggle-btn:hover {
+    color: var(--weilin-prompt-ui-primary-color);
+    background: var(--weilin-prompt-ui-button-hover);
+}
+
+.lora-sync-btn.is-active {
+    color: var(--weilin-prompt-ui-primary-color);
+}
+
+/* wlr 悬浮栏 3 行排版（grid）：行1=模型权重、行2=文本权重、行3=功能按钮横排；
+   封面跨满 3 行占左列。按钮行横排靠 .controls-actions 容器（wlr 与普通模式共用） */
+.token-controls.is-lora {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 6px;
+}
+
+.token-controls.is-lora .lora-cover-thumb {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    align-self: center;
+}
+
+.token-controls.is-lora .lora-weight-controls {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+}
+
+.token-controls.is-lora .controls-actions {
+    grid-column: 2;
+    grid-row: 3;
+    /* 布满整行：与权重输入行同宽（列宽由权重行决定），按钮两端对齐均匀分布 */
+    justify-content: space-between;
+    /* 按钮加大：24px 命中区 + 15px 图标，与权重输入框视觉平衡 */
+    gap: 4px;
+}
+
+.token-controls.is-lora .controls-actions button {
+    padding: 4px;
+    line-height: 0;
+}
+
+.token-controls.is-lora .controls-actions svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* 封面悬停弹出的 lora 信息浮窗：z-index 需高于悬浮栏(1000)，
+   否则同层级下会被悬浮栏盖住（LoraCard 根元素自身也是 z-index:1000） */
+.wlr-cover-card {
+    z-index: 1002;
+}
+.lora-cover-thumb {
+    width: 64px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    flex-shrink: 0;
+    cursor: pointer;
+    align-self: center;
 }
 
 /* 框选操作菜单额外样式 */

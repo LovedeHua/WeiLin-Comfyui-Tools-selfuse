@@ -285,7 +285,8 @@ const streamResponse = async (data, onMessage, onError, onComplete) => {
 .ai-chat-window {
     display: flex;
     height: 100%;
-    background: var(--weilin-prompt-ui-primary-bg);
+    /* 窗口底色由 DraggableWindow 根统一画一层（rgba 调色板下多层叠加会变实心） */
+    background: transparent;
     color: var(--weilin-prompt-ui-primary-text);
 }
 

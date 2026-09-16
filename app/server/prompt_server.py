@@ -108,6 +108,22 @@ async def _check_lora_exists(request):
     return web.json_response({"data": check_lora_files_exist(names)})
 
 
+@PromptServer.instance.routes.post(baseUrl+"check_lora_previews")
+async def _check_lora_previews(request):
+    """批量获取 Lora 本地封面缩略图（提示词 wlr 标签缩略图预查）：
+    返回 data={name: dataURL|None} 与 paths={name: 解析后的真实相对路径}（wlr 标签里的
+    model_name 不含扩展名，详情/悬浮卡片需要真实路径）"""
+    try:
+        data = await request.json()
+        names = data.get("names", [])
+    except Exception:
+        names = []
+    if not isinstance(names, list):
+        names = []
+    previews, paths = get_lora_previews(names)
+    return web.json_response({"data": previews, "paths": paths})
+
+
 @PromptServer.instance.routes.get(baseUrl+"get_embeddings_list")
 async def _get_embeddings_list(request):
     """返回 embeddings 目录文件列表（去扩展名，与 ComfyUI 原生 /api/embeddings 响应同形，裸数组）。
@@ -254,6 +270,15 @@ async def _api_get_loras_info_img(request):
 async def _upload_image(request):
     post = await request.post()
     data = image_upload(post)
+    return web.json_response(data)
+
+@PromptServer.instance.routes.post(baseUrl+'lorainfo/api/loras/set/img/url')
+async def _set_lora_cover_by_url(request):
+    post = await request.json()
+    data = set_cover_from_url(post.get('file'), post.get('url'))
+    status = data.get('status', 200)
+    if status != 200:
+        return web.json_response(data, status=500)
     return web.json_response(data)
 # ======================================================================================================================
 

@@ -6,7 +6,8 @@
       :position="windows.prompt.position" :size="windows.prompt.size" :z-index="windowManager.getZIndex('promptBox')"
       @update:position="updatePosition('prompt', $event)" @update:size="updateSize('prompt', $event)"
  @close="closeWindow('prompt')">
-      <PromptBox :promptManager="promptManager" :hasPromptLoraStack="hasPromptLoraStack" ref="promptBoxRef" />
+      <PromptBox :promptManager="promptManager" :hasPromptLoraStack="hasPromptLoraStack" ref="promptBoxRef"
+        @request-window-size="onPromptRequestWindowSize" />
     </DraggableWindow>
 
     <!-- Tag管理窗口 -->
@@ -39,7 +40,7 @@
       :z-index="windowManager.getZIndex('favoritesManager')"
       @update:position="updatePosition('favorites', $event)" @update:size="updateSize('favorites', $event)"
  @close="closeWindow('favorites')">
-      <FavoritesManager />
+      <FavoritesManager @edit-favorite="openFavoriteEdit" />
     </DraggableWindow>
 
     <!-- AI窗口 -->
@@ -93,6 +94,7 @@
     <!-- 悬浮球 -->
     <FloatingBall v-if="isFloatingBallEnabled"></FloatingBall>
     <loraDetail ref="loraDetailLoraStackRef" />
+    <FavoriteEditWindow ref="favoriteEditRef" />
 
     <!-- 版本更新提示 -->
     <div v-if="showVersionUpdate" class="version-update-notification">
@@ -127,6 +129,7 @@ import NodeListWindow from '@/view/node_list/index.vue'
 import CloudWindow from '@/view/cloud/index.vue'
 import LoraStackWindow from '@/view/lora_manager/lora_stack.vue'
 import DanbooruManagerWindow from '@/view/danbooru/danbooru_manager.vue'
+import FavoriteEditWindow from '@/view/favorites_manager/favorite_edit_window.vue'
 import { translatorApi } from '@/api/translator'
 import { tagsApi } from '@/api/tags'
 import { historyApi } from '@/api/history'
@@ -723,6 +726,17 @@ const updateSize = (windowName, newSize) => {
   }
 }
 
+// 74.88 收起空白：PromptBox 收起/展开内嵌 Lora 时请求调整提示词窗口大小
+// （收起→收缩到内容高度去掉底部空白；展开→恢复收起前高度）。走同一条持久化链。
+const onPromptRequestWindowSize = (newSize) => {
+  if (windows.value.prompt && newSize && newSize.width > 0 && newSize.height > 0) {
+    windows.value.prompt.size = {
+      width: Math.round(newSize.width),
+      height: Math.round(newSize.height)
+    }
+  }
+}
+
 
 // 复原所有窗口到默认位置和大小
 const restoreWindowsToDefault = () => {
@@ -820,6 +834,13 @@ const promptBoxRef = ref()
 const loraStackRef = ref()
 const loraManagerRef = ref()
 const loraDetailLoraStackRef = ref()
+const favoriteEditRef = ref()
+
+// 收藏夹 → 编辑收藏窗口：组件事件直调（引用传递，不经 postMessage 克隆）
+const openFavoriteEdit = (item) => {
+  console.log('[WeiLin] 编辑窗口 open, isEditing =', !!item, ', item =', item ? { id_index: item.id_index, name: item.name, tagLen: (item.tag || '').length } : null)
+  favoriteEditRef.value.open(item)
+}
 const danbooruManagerRef = ref()
 
 // 提示词编辑器工具栏的开关式打开：消息带 toggle 标记且目标窗口已可见时关闭它，否则打开并激活

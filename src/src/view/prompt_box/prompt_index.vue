@@ -1,5 +1,6 @@
 ﻿<template>
-  <div class="weilin_prompt_ui_prompt-box">
+  <!-- 74.86：Lora 面板展开时给根加激活类，整条高度链交给 CSS flex 分配（见 prompt_index.css） -->
+  <div ref="promptBoxEl" class="weilin_prompt_ui_prompt-box" :class="{ 'weilin-lora-embed-active': showLoraManager }">
     <!-- Lora栈 -->
     <LoraStack v-if="props.promptManager === 'prompt'" :is-open="loraOpen" :selected-loras="selectedLoras"
       @close="closeLora" />
@@ -469,7 +470,7 @@
       <!-- 控制栏容器（隐藏用 opacity+pointer-events 而非 visibility：
            visibility 是继承属性，会被子按钮的 transition:all 过渡导致个别按钮延迟消失；
            opacity 不继承、不触发子元素过渡，整栏同帧消失。隐藏时仍渲染可测量尺寸） -->
-      <div ref="controlsBarRef" class="token-controls"
+      <div ref="controlsBarRef" class="token-controls" :class="{ 'is-lora': tokens[activeControls]?.isLoraTag }"
         :style="{
           top: controlsPosition.top,
           left: controlsPosition.left,
@@ -485,25 +486,56 @@
           <span class="weight-label">{{ t('promptBox.weight') }}</span>
         </div>
 
+        <!-- Lora 本地封面缩略图（无本地封面不渲染）；视频封面静默循环预览；点击打开 lora 详情窗 -->
+        <video v-if="activeLoraCover && isVideoCover" :src="activeLoraCover" class="lora-cover-thumb"
+          muted autoplay loop playsinline @click="openLoraDetailFromCover()"
+          @mouseenter="showLoraCardFromCover" @mouseleave="scheduleHideCoverCard"></video>
+        <img v-else-if="activeLoraCover" :src="activeLoraCover" class="lora-cover-thumb"
+          @click="openLoraDetailFromCover()"
+          @mouseenter="showLoraCardFromCover" @mouseleave="scheduleHideCoverCard">
+
         <!-- Lora标签的权重控制 -->
         <div class="lora-weight-controls" v-if="tokens[activeControls]?.isLoraTag">
           <div class="weight-control">
-            <input type="number" v-model="loraModelWeight" step="0.1" class="weight-input" @input="applyLoraWeights"
+            <input type="number" v-model="loraModelWeight" step="0.1" class="weight-input" @input="onLoraModelWeightInput"
               @wheel="adjustWeightByWheel($event, 'loraModel')">
             <span class="weight-label">{{ t('promptBox.modelWeight') }}</span>
           </div>
           <div class="weight-control">
-            <input type="number" v-model="loraTextWeight" step="0.1" class="weight-input" @input="applyLoraWeights"
+            <input type="number" v-model="loraTextWeight" step="0.1" class="weight-input" @input="onLoraTextWeightInput"
               @wheel="adjustWeightByWheel($event, 'loraText')">
             <span class="weight-label">{{ t('promptBox.textWeight') }}</span>
           </div>
         </div>
 
+        <!-- 功能按钮容器：wlr 模式下作为 grid 第 3 行（按钮横排） -->
+        <div class="controls-actions">
         <!-- 收藏按钮 -->
         <button class="favour-btn" @click="openFavourTag(tokens[activeControls])" :title="t('promptBox.favour')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
               fill="#FFD700" />
+          </svg>
+        </button>
+
+        <!-- 权重同步开关（仅 wlr）：开启后模型/文本权重联动 -->
+        <button v-if="tokens[activeControls]?.isLoraTag" class="lora-sync-btn"
+          :class="{ 'is-active': loraWeightSync }" @click="toggleLoraWeightSync" :title="t('promptBox.weightSync')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+          </svg>
+        </button>
+
+        <!-- 启用/禁用按钮（仅 wlr）：复用 isHidden 机制，与双击屏蔽一致；
+             图标与框选操作菜单一致——启用中显示红⊘（点击禁用），禁用中显示绿✓（点击启用） -->
+        <button v-if="tokens[activeControls]?.isLoraTag" class="lora-toggle-btn" @click="toggleHidden(activeControls, null)"
+          :title="tokens[activeControls]?.isHidden ? t('promptBox.enableTag') : t('promptBox.disableTag')">
+          <svg v-if="!tokens[activeControls]?.isHidden" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="#ff4d4f" stroke-width="2" />
+            <path d="M8.5 8.5l7 7" stroke="#ff4d4f" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="#52c41a">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
           </svg>
         </button>
 
@@ -569,15 +601,22 @@
           </div>
         </div>
 
-        <!-- 换行符按钮 -->
-        <button class="line-token-btn" @click="handelLineToken" :title="t('promptBox.addLineToken')"
+        <!-- 换行符按钮（仅普通模式：wlr 悬浮栏已移除该按钮） -->
+        <button v-if="!tokens[activeControls]?.isLoraTag" class="line-token-btn" @click="handelLineToken" :title="t('promptBox.addLineToken')"
           style="margin-left: 8px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path d="M5 19h14v-2H5v2zm0-7h14v-2H5v2zm0-7v2h14V5H5z" fill="#888" />
             <path d="M7 17v-2h2v2H7zm0-7V8h2v2H7zm0-7V3h2v2H7z" fill="#4285f4" />
           </svg>
         </button>
+        </div>
       </div>
+
+      <!-- 悬停封面的 lora 信息浮窗（复用 LoraCard 悬浮卡片） -->
+      <LoraCard class="wlr-cover-card" ref="coverCardRef" v-if="showCoverCard" :fileNmae="coverCardFile"
+        :paddingLeft="coverCardPos.left" :paddingTop="coverCardPos.top"
+        @cardLeave="hideCoverCard" @cardenter="keepCoverCard" @openDetail="openDetailFromCoverCard"
+        @cover-updated="refreshLoraCoverForFile" />
 
 
       <!-- 自定义确认对话框 -->
@@ -720,8 +759,10 @@ import SettingDialog from './components/setting_dialog.vue'
 import ThemeSwitch from '@/components/ThemeSwitch.vue'
 import TagManager from '@/view/tag_manager/tag_index.vue'  // 导入 TagManager 组件
 import LoraStack from './components/lora_stack.vue'
+import LoraCard from '@/view/lora_manager/lora_card.vue'
 import { translatorApi } from '@/api/translator'
 import { historyApi } from '@/api/history'
+import { loraApi } from '@/api/lora'
 import message from '@/utils/message'
 import { autocompleteApi } from '@/api/autocomplete'
 import LoraManager from "@/view/lora_manager/lora_index.vue"
@@ -782,6 +823,312 @@ const languageSwitcherRef = ref(null)
 // Lora选择信息
 const selectedLoras = ref([])
 const loraOpen = ref(false)
+
+// ===== wlr 标签 ↔ lora 堆双向同步（文本新增→入堆、文本删除→出堆、权重实时互写）=====
+// 文本是 wlr 标签的载体，堆与文本按名字对齐；防循环靠"上次同步快照"——写堆后立即更新
+// 快照，堆 watcher 比较快照相同则不回写文本（syncingFromText 标志作同步期双保险）。
+const wlrTagRegex = /^<wlr:([^:]+):([^:]+):([^>]+)>$/
+let syncingFromText = false
+let lastStackSnapshot = JSON.stringify([])
+// 上次同步时文本里出现过的 wlr 名字集合：删除方向只作用于"上次有、这次没了"的名字，
+// 避免误删管理器直接加入堆（文本无 wlr 标签）的条目。初始为空 → 首次同步不删任何东西
+let lastWlrNames = new Set()
+
+const stackSnapshot = () => JSON.stringify(selectedLoras.value.map(l => ({ n: l.name, w: l.weight, t: l.text_encoder_weight })))
+
+// 从当前 tokens 提取完整 wlr 标签：name → {weight, text_encoder_weight}
+const extractWlrTagsFromTokens = () => {
+  const map = new Map()
+  tokens.value.forEach(t => {
+    if (t.isHidden || !t.isLoraTag) return
+    const m = t.text.match(wlrTagRegex)
+    if (m) {
+      const w1 = parseFloat(m[2])
+      const w2 = parseFloat(m[3])
+      if (Number.isFinite(w1) && Number.isFinite(w2)) map.set(m[1], { weight: w1, text_encoder_weight: w2 })
+    }
+  })
+  return map
+}
+
+// 文本 → 堆：在 tokens 重建后调用（防抖），保证堆如实反映当前文本
+const syncWlrTagsWithStack = () => {
+  const textTags = extractWlrTagsFromTokens()
+  syncingFromText = true
+  textTags.forEach((w, name) => {
+    const entry = selectedLoras.value.find(l => l.name === name)
+    if (!entry) {
+      selectedLoras.value.push({
+        name,
+        display_name: name.replace(/\.(safetensors|pt|bin|ckpt)$/i, ''),
+        // wlr 标签里的名字不含扩展名/子目录，直接当 file 查详情后端会 500（表现=网络错误）；
+        // 优先用 check_lora_previews 已解析的真实相对路径，未返回时先用裸名（watcher 会补）
+        lora: loraPathMap.value[name] || name,
+        weight: w.weight,
+        text_encoder_weight: w.text_encoder_weight,
+        loraWorks: ''
+      })
+    } else {
+      if (Number(entry.weight) !== w.weight) entry.weight = w.weight
+      if (Number(entry.text_encoder_weight) !== w.text_encoder_weight) entry.text_encoder_weight = w.text_encoder_weight
+    }
+  })
+  // 删除方向：只移除"上次在文本出现过、这次文本里没了"的 wlr 名字对应条目。
+  // 不能简单地"堆有文本无就删"——管理器"添加到堆"会直接 push 进 selectedLoras 且文本
+  // 并没有 wlr 标签，那样会被误删（表现为添加后条目立刻消失）。
+  const textNames = new Set(textTags.keys())
+  const removedNames = [...lastWlrNames].filter(n => !textNames.has(n))
+  if (removedNames.length > 0) {
+    selectedLoras.value = selectedLoras.value.filter(l => !removedNames.includes(l.name))
+  }
+  syncingFromText = false
+  lastStackSnapshot = stackSnapshot()
+  lastWlrNames = textNames
+  prefetchLoraCoverImages(textTags)
+}
+
+// 堆 → 文本回写（堆 UI 改权重/删条目后）：反写文本 wlr 标签权重 / 移除已不在堆里的标签。
+// 防抖 100ms：管理器"添加"会同时插标签+进堆（两条消息），合并窗口内只处理一次
+let stackToTextTimer = null
+const scheduleStackToText = () => {
+  if (stackToTextTimer) clearTimeout(stackToTextTimer)
+  stackToTextTimer = setTimeout(() => {
+    stackToTextTimer = null
+    applyStackToText()
+  }, 100)
+}
+
+const applyStackToText = () => {
+  let changed = false
+  const removed = []
+  tokens.value.forEach(t => {
+    if (t.isHidden || !t.isLoraTag) return
+    const m = t.text.match(wlrTagRegex)
+    if (!m) return
+    const entry = selectedLoras.value.find(l => l.name === m[1])
+    if (!entry) {
+      removed.push(t)
+    } else if (Number(entry.weight) !== Number(m[2]) || Number(entry.text_encoder_weight) !== Number(m[3])) {
+      t.text = `<wlr:${m[1]}:${entry.weight}:${entry.text_encoder_weight}>`
+      changed = true
+    }
+  })
+  if (removed.length > 0) {
+    tokens.value = tokens.value.filter(t => !removed.includes(t))
+    changed = true
+  }
+  if (changed) {
+    updateInputText()
+    finishPromptPutItHistory()
+  }
+}
+
+// ===== wlr 标签封面缩略图（批量预查 + 缓存，无本地封面不显示）=====
+const loraCoverMap = ref({}) // name → base64 dataURL | null（null=已查、无封面）
+const loraPathMap = ref({})  // name → 解析后的真实相对路径（wlr 标签名不含扩展名，详情/悬浮卡片需要）
+let loraCoverTimer = null
+
+const prefetchLoraCoverImages = (textTags) => {
+  const pending = [...textTags.keys()].filter(n => n && !(n in loraCoverMap.value))
+  if (pending.length === 0) return
+  if (loraCoverTimer) clearTimeout(loraCoverTimer)
+  loraCoverTimer = setTimeout(() => {
+    loraCoverTimer = null
+    loraApi.checkLoraPreviews(pending)
+      .then((res) => {
+        const data = res?.data
+        if (data && typeof data === 'object') {
+          const filtered = {}
+          Object.keys(data).forEach(k => {
+            // 图片(data:image)与视频(data:video / fmt=mp4 URL)都可预览；其余按无封面处理
+            const v = data[k]
+            filtered[k] = (typeof v === 'string' && (v.startsWith('data:image/') || v.startsWith('data:video/') || v.includes('fmt=mp4'))) ? v : null
+          })
+          loraCoverMap.value = { ...loraCoverMap.value, ...filtered }
+        }
+        const paths = res?.paths
+        if (paths && typeof paths === 'object') {
+          loraPathMap.value = { ...loraPathMap.value, ...paths }
+        }
+      })
+      .catch((e) => {
+        // 诊断：后端新增 check_lora_previews 端点需重启 ComfyUI 才可用
+        console.warn('[WeiLin] 获取 Lora 封面失败（端点需重启 ComfyUI？）:', e)
+      })
+  }, 150)
+}
+
+// 路径解析是异步的（check_lora_previews 返回后）：堆里仍挂着裸名的 wlr 条目在此补成真实路径，
+// 同时覆盖历史持久化数据（收藏/标签的 temp_lora 可能存了裸名）。只补解析命中的条目；
+// 管理器直接添加的条目 lora 本就是完整路径，不受影响
+watch(loraPathMap, (map) => {
+  if (!map || typeof map !== 'object') return
+  selectedLoras.value.forEach(l => {
+    const resolved = map[l.name]
+    if (resolved && l.lora !== resolved) l.lora = resolved
+  })
+})
+
+// 当前悬浮 wlr 标签的封面（无封面/未返回时不渲染）；视频封面用 <video> 静默循环预览
+const activeLoraCover = computed(() => {
+  if (activeControls.value === null) return ''
+  const t = tokens.value[activeControls.value]
+  if (!t || !t.isLoraTag) return ''
+  const m = t.text.match(wlrTagRegex)
+  if (!m) return ''
+  return loraCoverMap.value[m[1]] || ''
+})
+
+const isVideoCover = computed(() => {
+  const v = activeLoraCover.value
+  return !!v && (v.startsWith('data:video/') || v.includes('fmt=mp4') || v.toLowerCase().endsWith('.mp4'))
+})
+
+// 当前悬浮 wlr 标签对应的 lora 真实路径（后端解析：wlr 标签里的 model_name 不含扩展名）
+const activeLoraFile = computed(() => {
+  if (activeControls.value === null) return ''
+  const t = tokens.value[activeControls.value]
+  if (!t || !t.isLoraTag) return ''
+  const m = t.text.match(wlrTagRegex)
+  if (!m) return ''
+  return loraPathMap.value[m[1]] || m[1]
+})
+
+// 换封面后刷新 wlr 缩略图：loraCoverMap 是"查过就不再查"的缓存（prefetch 只取
+// `!(n in loraCoverMap)` 的名字），不主动失效的话，管理器里换了封面、堆/悬停缩略图
+// 仍一直显示旧图。这里删掉命中条目并重新预取：图片是 base64、视频是带 mtime 戳的
+// URL，重取一次即拿到新封面。
+const refreshLoraCoverForFile = (file) => {
+  if (!file) return
+  const norm = (s) => (s || '').replace(/\\/g, '/')
+  const stem = (s) => norm(s).split('/').pop().replace(/\.(safetensors|pt|bin|ckpt)$/i, '')
+  const target = norm(file)
+  const targetStem = stem(file)
+  const keys = Object.keys(loraCoverMap.value).filter(k =>
+    norm(k) === target ||
+    stem(k) === targetStem ||
+    norm(loraPathMap.value[k] || '') === target
+  )
+  if (keys.length === 0) return
+  const next = { ...loraCoverMap.value }
+  keys.forEach(k => { delete next[k] })
+  loraCoverMap.value = next
+  prefetchLoraCoverImages(extractWlrTagsFromTokens())
+}
+
+// 从悬浮栏边界弹出位置（用户思路：弹窗一律从悬浮栏边界弹出，不用记忆位置）：
+// 候选 = 悬浮栏左 / 悬浮栏右 / 悬浮栏下方 / 悬浮栏上方，逐个要求"完全在视口内 且 不与
+// 悬浮栏相交"（候选用自然坐标生成，clamp 只在最终兜底），全不合格取相交面积最小的
+const pickPositionFromBar = (cardWidth, cardHeight) => {
+  const barRect = controlsBarRef.value ? controlsBarRef.value.getBoundingClientRect() : null
+  const intersectsBar = (l, t) => {
+    if (!barRect) return false
+    return l < barRect.right && l + cardWidth > barRect.left && t < barRect.bottom && t + cardHeight > barRect.top
+  }
+  const overlapArea = (l, t) => {
+    if (!barRect) return 0
+    const w = Math.min(l + cardWidth, barRect.right) - Math.max(l, barRect.left)
+    const h = Math.min(t + cardHeight, barRect.bottom) - Math.max(t, barRect.top)
+    return w > 0 && h > 0 ? w * h : 0
+  }
+  const clampTop = (t) => Math.max(10, Math.min(t, window.innerHeight - cardHeight - 10))
+  const clampLeft = (l) => Math.max(10, Math.min(l, window.innerWidth - cardWidth - 10))
+  const bar = barRect || { left: 100, right: 500, top: 100, bottom: 200 }
+  const candidates = [
+    { left: bar.left - cardWidth - 10, top: bar.top },
+    { left: bar.right + 10, top: bar.top },
+    { left: bar.left, top: bar.bottom + 6 },
+    { left: bar.left, top: bar.top - cardHeight - 6 }
+  ]
+  const inViewport = (p) => p.left >= 10 && p.left + cardWidth <= window.innerWidth - 10
+    && p.top >= 10 && p.top + cardHeight <= window.innerHeight - 10
+  let pick = candidates.find(p => inViewport(p) && !intersectsBar(p.left, p.top))
+  if (!pick) {
+    const usable = candidates.filter(inViewport)
+    const pool = usable.length > 0 ? usable : candidates
+    pick = pool.slice().sort((a, b) => overlapArea(a.left, a.top) - overlapArea(b.left, b.top))[0]
+  }
+  return { left: clampLeft(pick.left), top: clampTop(pick.top) }
+}
+
+// 点击封面打开 lora 详情窗（详情窗在主页面，走既有 openLoraDetail 消息链路）；
+// 详情窗/信息浮窗存在期间钉住 wlr 悬浮栏（controlsPinned），不随鼠标离开自动消失
+const controlsPinned = ref(false)
+let loraDetailOpenedForCover = false // 详情窗经本入口打开且尚未被"悬停其他标签"复位
+let pinnedTagIndex = null // 钉住所属的标签索引：showControls 只有悬停"其他"标签才解除钉住，
+// 重新悬停同一标签不能解（否则详情窗开着时再悬停再移开，悬浮栏会消失——钉住被误释放）
+const openLoraDetailFromCover = (file) => {
+  // file 仅接受字符串路径；@click 直接绑定会把 MouseEvent 传入，必须排除（走 activeLoraFile 兜底）
+  const f = (typeof file === 'string' && file) || activeLoraFile.value
+  if (!f) return
+  controlsPinned.value = true
+  pinnedTagIndex = activeControls.value
+  loraDetailOpenedForCover = true
+  // 详情窗位置由主页面自身管理（App.vue openLoraDetail 忽略 position），不在此传
+  window.parent.postMessage({ type: 'weilin_prompt_ui_openLoraDetail', lora: f }, '*')
+}
+
+// 浮窗内"详情"按钮（LoraCard openDetail 事件）：关闭浮窗 + 走封面同款详情链路
+// （详情窗在主页面，postMessage；payload name 即 coverCardFile 的解析后路径）
+const openDetailFromCoverCard = (data) => {
+  const name = data?.name || data
+  hideCoverCard()
+  openLoraDetailFromCover(name)
+}
+
+// 悬停封面：显示 lora 信息浮窗（复用 LoraCard 悬浮卡片，定位逻辑同 lora 堆的 hover 卡片）
+const showCoverCard = ref(false)
+const coverCardFile = ref('')
+const coverCardRef = ref(null)
+const isEnterCoverCard = ref(false)
+let coverCardTimer = null
+const coverCardPos = ref({ left: 100, top: 0 })
+
+watch(showCoverCard, (v) => {
+  // 信息浮窗存在期间钉住悬浮栏；浮窗关闭后若详情窗不是打开状态则解除钉住，
+  // 并重新走一次隐藏判定——鼠标可能在钉住期间就已离开标签（mouseleave 被钉住拦下），
+  // 解除后若不主动判定，悬浮栏会永久留屏（这是"离开后不消失"的根因）
+  if (v) {
+    controlsPinned.value = true
+    pinnedTagIndex = activeControls.value
+  } else if (!loraDetailOpenedForCover) {
+    controlsPinned.value = false
+    pinnedTagIndex = null
+    scheduleHideCheck()
+  }
+})
+// 点击封面打开详情窗时置位（openLoraDetailFromCover）；详情窗关闭无法从 iframe 感知，
+// 钉住保持到用户悬停其他标签（showControls 里解除）
+
+const showLoraCardFromCover = (event) => {
+  const file = activeLoraFile.value
+  if (!file) return
+  if (coverCardTimer) { clearTimeout(coverCardTimer); coverCardTimer = null }
+  isEnterCoverCard.value = false
+  // LoraCard 实际尺寸 520×400（.lora_catd_content 固定尺寸），从悬浮栏边界弹出：
+  // 候选 = 悬浮栏左/右/下/上，要求不与悬浮栏相交且在视口内（pickPositionFromBar 已含兜底）
+  coverCardPos.value = pickPositionFromBar(520, 400)
+  coverCardFile.value = file
+  showCoverCard.value = true
+  nextTick(() => {
+    coverCardRef.value?.refresh()
+  })
+}
+
+const scheduleHideCoverCard = () => {
+  setTimeout(() => {
+    if (!isEnterCoverCard.value) {
+      showCoverCard.value = false
+      coverCardFile.value = ''
+    }
+  }, 200)
+}
+const keepCoverCard = () => { isEnterCoverCard.value = true }
+const hideCoverCard = () => {
+  isEnterCoverCard.value = false
+  showCoverCard.value = false
+  coverCardFile.value = ''
+}
 
 // 添加自动补全相关的 ref
 const showAutocomplete = ref(false);
@@ -1118,6 +1465,51 @@ const applyLoraWeights = () => {
     }
   }
 };
+
+// ============ 权重同步开关（wlr 悬浮栏） ============
+// 每个 wlr lora 独立记忆（键 = 归一化名：去路径/后缀），与 lora堆 卡片的 sync_weights 双向同步：
+// 悬浮栏切换 → 广播 set_sync 给 lora堆；lora堆卡片切换 → 广播 sync_changed 回来更新本端 map
+const wlrKey = (s) => String(s || '').replace(/\\/g, '/').split('/').pop().replace(/\.(safetensors|pt|sft|ckpt|lora)$/i, '');
+const loraSyncMap = ref((() => {
+  try { return JSON.parse(localStorage.getItem('weilin_prompt_ui_lora_weight_sync_map') || '{}') } catch (e) { return {} }
+})());
+const persistLoraSyncMap = () => localStorage.setItem('weilin_prompt_ui_lora_weight_sync_map', JSON.stringify(loraSyncMap.value));
+// 当前悬浮栏对应的 wlr lora 名（token 文本第一段）
+const activeWlrName = computed(() => {
+  const token = tokens.value[activeControls.value];
+  if (!token?.isLoraTag) return '';
+  const m = token.text.match(/<wlr:([^:]+):[^:]*:[^>]*>/);
+  return m ? m[1] : '';
+});
+const loraWeightSync = computed({
+  get: () => !!loraSyncMap.value[wlrKey(activeWlrName.value)],
+  set: (v) => {
+    loraSyncMap.value = { ...loraSyncMap.value, [wlrKey(activeWlrName.value)]: v };
+    persistLoraSyncMap();
+  }
+});
+const toggleLoraWeightSync = () => {
+  loraWeightSync.value = !loraWeightSync.value;
+  // lora堆窗口里同名卡片的权重同步开关跟着切换
+  window.postMessage({ type: 'weilin_prompt_ui_lora_stack_set_sync', lora: activeWlrName.value, value: loraWeightSync.value }, '*');
+  // 开启瞬间立即对齐：文本权重向模型权重看齐
+  if (loraWeightSync.value) {
+    syncLoraWeights('model');
+    applyLoraWeights();
+  }
+};
+// 把 source 权重同步给另一个；源值处于中间态（空/非有限数）时跳过，避免互相污染；
+// 同步写入归一化数字（'0.' -> '0'），避免过程值原样污染另一输入框
+const syncLoraWeights = (source) => {
+  if (!loraWeightSync.value) return;
+  const src = source === 'model' ? loraModelWeight.value : loraTextWeight.value;
+  if (src === '' || !Number.isFinite(Number(src))) return;
+  const norm = String(Number(src));
+  if (source === 'model') loraTextWeight.value = norm;
+  else loraModelWeight.value = norm;
+};
+const onLoraModelWeightInput = () => { syncLoraWeights('model'); applyLoraWeights(); };
+const onLoraTextWeightInput = () => { syncLoraWeights('text'); applyLoraWeights(); };
 
 
 // 修改wrapWith函数
@@ -2149,17 +2541,22 @@ const clampControlsPosition = (winEl, tagRect) => {
   const maxX = Math.min(window.innerWidth - margin, winR ? winR.right : window.innerWidth - margin)
   const minY = Math.max(margin, winR ? winR.top : margin)
 
+  // 垂直：按浮窗实测高度重算——默认贴在标签上方（留 6px 间隙），上方放不下翻转到标签下方。
+  // 不能写死偏移：封面缩略图(96px)会把浮窗撑高，固定 -50px 会让浮窗底缘压住标签
+  let top = controlsPosition.value.top
+  const aboveTop = tagRect.top - r.height - 6
+  if (aboveTop >= minY) {
+    top = `${aboveTop}px`
+  } else {
+    top = `${tagRect.bottom + 6}px`
+  }
+
   // 水平：超出边界则平移拉回（bar 是 translateX(-50%) 居中定位，调整 left 即 1:1 平移）
   let dx = 0
   if (r.left < minX) {
     dx = minX - r.left
   } else if (r.right > maxX) {
     dx = maxX - r.right
-  }
-  // 垂直：顶部放不下时翻转到标签下方
-  let top = controlsPosition.value.top
-  if (r.top < minY) {
-    top = `${tagRect.bottom + 6}px`
   }
 
   if (dx || top !== controlsPosition.value.top) {
@@ -2172,6 +2569,15 @@ const clampControlsPosition = (winEl, tagRect) => {
 }
 
 const showControls = (index, event) => {
+  // 鼠标进入标签：标记悬停态（隐藏判定用）。
+  // 钉住只保护"当初钉住的那个标签"：悬停其他标签才解除；
+  // 重新悬停同一标签（详情窗还开着）必须保留钉住，否则移开指针悬浮栏会消失
+  isOverTag.value = true
+  if (controlsPinned.value && index !== pinnedTagIndex) {
+    controlsPinned.value = false
+    loraDetailOpenedForCover = false
+    pinnedTagIndex = null
+  }
   // 框选模式下不显示控制菜单
   if (isBoxSelectMode.value) {
     return;
@@ -2250,22 +2656,29 @@ const findInnerWeight = (content) => {
 };
 
 const hideTimeout = ref(null)
+// 鼠标是否悬停在触发悬浮栏的标签上（与 isOverControls——悬停在悬浮栏上——互补）。
+// 钉住解除后的"重新隐藏判定"必须同时排除这两处：鼠标可能仍在标签或悬浮栏上，
+// 此时不能隐藏（否则正被悬停的标签的悬浮栏会被误藏）
+const isOverTag = ref(false)
 
-// 处理鼠标离开词组
-const handleMouseLeave = (index) => {
-  // 清除现有的定时器
+// 统一的延迟隐藏判定：钉住解除（浮窗/详情窗关闭）或鼠标离开标签后调用。
+// 100ms 内若鼠标进入标签/悬浮栏，或钉住重新置位，则不隐藏
+const scheduleHideCheck = () => {
   if (hideTimeout.value) {
     clearTimeout(hideTimeout.value)
   }
-
-  // 设置新的定时器
   hideTimeout.value = setTimeout(() => {
-    if (!isOverControls.value) {
+    if (!isOverControls.value && !controlsPinned.value && !isOverTag.value) {
       hideControls()
     }
     hideTimeout.value = null
   }, 100)
+}
 
+// 处理鼠标离开词组
+const handleMouseLeave = (index) => {
+  isOverTag.value = false
+  scheduleHideCheck()
   showTagTipsBox.value = false;
 }
 
@@ -2285,7 +2698,8 @@ const handleControlsLeave = () => {
 const hideControls = () => {
   // 隐藏时取消悬浮栏内部（权重输入框）的焦点，避免焦点残留在不可见元素上
   blurControlsFocus()
-  if (!isOverControls.value) {
+  // controlsPinned：信息浮窗或 lora 详情窗存在时钉住悬浮栏（需求：此时悬浮栏不自动消失）
+  if (!isOverControls.value && !controlsPinned.value) {
     activeControls.value = null
   }
 }
@@ -2499,12 +2913,17 @@ watch(tokens, () => {
   updateInputTextTimer = setTimeout(() => {
     updateInputTextTimer = null
     updateInputText()
+    syncWlrTagsWithStack()
   }, 200)
 }, { deep: true })
 
-watch(selectedLoras, (newLoras) => {
-  // console.log(newLoras)
-  // finishPromptPutItHistory()
+watch(selectedLoras, () => {
+  // 快照比较防循环：文本→堆同步引起的变化不再回写文本；堆 UI 的改动则反写文本
+  const snap = stackSnapshot()
+  if (!syncingFromText && snap !== lastStackSnapshot) {
+    lastStackSnapshot = snap
+    scheduleStackToText()
+  }
   finishPromptPutItHistory()
 }, { deep: true })
 
@@ -2620,6 +3039,107 @@ const showLoraManager = ref(false)
 const toggleLoraManager = () => {
   showLoraManager.value = !showLoraManager.value
 }
+
+// ===== 74.88 收起空白：Lora 收起后窗口高度仍停留在展开时的大小，底部留一大块空白 =====
+// 收起时把窗口高度收缩到内容自然高度（经 App 更新 windows.prompt.size，走正常 props 链，
+// 与拖拽 resize 同源、会被持久化）；重新展开时恢复收起前的高度。
+const promptBoxEl = ref(null)
+const emit = defineEmits(['request-window-size'])
+const previousWindowHeight = ref(null)
+// 74.91：窗口自动缩放（收起 Lora 时收缩到内容高度）只在“带 Lora 堆”的提示词窗口生效；
+// 无 Lora 堆的提示词窗口（无论主/编辑器，hasPromptLoraStack 为 false）保留用户手动尺寸，
+// 收起/展开 Lora 模块都不改变窗口大小。判定维度必须用 hasPromptLoraStack 而非 promptManager——
+// 因为 openPromptBox 在非 WeiLinPromptUI 节点上也是 promptManager==='prompt' 但无 Lora 堆，
+// 用 promptManager 会把这类窗口误判成“应收缩”，导致收起时窗口变小。
+const canAutoFitWindow = computed(() => props.hasPromptLoraStack)
+const emitWindowSize = (height) => {
+  const boxEl = promptBoxEl.value
+  const winEl = boxEl && boxEl.closest('.weilin_prompt_ui_draggable-window')
+  if (!boxEl || !winEl) return
+  emit('request-window-size', { width: winEl.offsetWidth, height })
+}
+// 收起态下把窗口收缩到内容自然高度。
+// 74.88c 关键修正：不能用 window-content.scrollHeight——它被钳制为 ≥ clientHeight，
+// 内容比窗口矮时读到的就是当前窗口高（收缩永远空操作、空白原样保留），
+// 内容比窗口高时又会把窗口撑到全部内容高（窗口反而变大）。
+// 改为直接量内容根元素（prompt-box）的自然高度；且收起只缩不涨（Math.min）。
+const fitWindowToCollapsedContent = async () => {
+  await nextTick()
+  const boxEl = promptBoxEl.value
+  const winEl = boxEl && boxEl.closest('.weilin_prompt_ui_draggable-window')
+  if (!boxEl || !winEl) return
+  const contentEl = winEl.querySelector('.weilin_prompt_ui_window-content')
+  if (!contentEl) return
+  const contentPadding = contentEl.offsetHeight - contentEl.clientHeight // window-content 上下 padding
+  const chrome = winEl.offsetHeight - contentEl.clientHeight // 标题栏 + 窗口边框
+  const natural = boxEl.offsetHeight + contentPadding + chrome
+  emitWindowSize(Math.min(winEl.offsetHeight, Math.max(200, natural)))
+}
+watch(showLoraManager, async (visible) => {
+  const boxEl = promptBoxEl.value
+  const winEl = boxEl && boxEl.closest('.weilin_prompt_ui_draggable-window')
+  if (!boxEl || !winEl) return
+  // 74.95b/74.96：展开/收起 Lora 模块会切换窗口内滚动容器
+  //（收起态由 window-content 滚、展开态由 .main-content 滚）并改 flex 链，
+  // 浏览器把这个切换当成"容器换了"把 scrollTop 重置为 0 → 视野瞬间回顶。
+  // 变化前（watch 默认 pre-flush，DOM 尚未重排）保存两个容器的 scrollTop，
+  // 变化后把"之前活跃容器"的偏移还给"现在活跃容器"。
+  const contentEl = winEl.querySelector('.weilin_prompt_ui_window-content')
+  const mainEl = boxEl.querySelector('.weilin_prompt_ui_main-content')
+  const savedContent = contentEl ? contentEl.scrollTop : 0
+  const savedMain = mainEl ? mainEl.scrollTop : 0
+
+  // 窗口高度自适应（仅 lora 堆窗口）：展开恢复保存高度，收起缩到内容自然高。
+  // 注意：滚动位置保护要两种窗口都做，不能因为无 lora 堆就跳过（否则收起会回顶）。
+  if (canAutoFitWindow.value) {
+    if (!visible) {
+      previousWindowHeight.value = winEl.offsetHeight
+      await fitWindowToCollapsedContent()
+    } else if (previousWindowHeight.value) {
+      emitWindowSize(previousWindowHeight.value)
+      previousWindowHeight.value = null
+    }
+  }
+
+  // 74.96b：恢复滚动位置必须赶在浏览器"绘制"之前，否则会先画出错误的一帧再跳 → 肉眼闪烁。
+  // 塌陷/展开的 DOM 与窗口高度自适应是两次独立的响应式更新，需要两次 nextTick 才都 flush；
+  // 微任务早于下一帧绘制，此时写入 scrollTop，浏览器不会画出中间态。
+  // 闪烁主因：收起瞬间 main-content 失去 overflow-y:auto，原本被裁掉的提示词内容会一次性
+  // 全部展开；若等 rAF 之后再补写 scrollTop，那帧"多出来的内容"已经被画出来了。
+  const applyScroll = () => {
+    if (visible) {
+      // 收起→展开：之前滚动容器是 window-content，把它的偏移还给 main-content
+      if (mainEl) mainEl.scrollTop = savedContent
+    } else {
+      // 展开→收起：之前滚动容器是 main-content，把它的偏移还给 window-content
+      if (contentEl) contentEl.scrollTop = savedMain
+    }
+  }
+  await nextTick()
+  await nextTick()
+  applyScroll()
+  // 兜底：若异步内容/窗口高度晚一步稳定（上面的写入被钳制），再校正一次；
+  // 值没变就不重复写，避免制造二次闪烁。
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  const settledEl = visible ? mainEl : contentEl
+  const settledVal = visible ? savedContent : savedMain
+  if (settledEl && Math.abs(settledEl.scrollTop - settledVal) > 2) applyScroll()
+})
+// 74.88 补：窗口打开时 Lora 固定是收起态（showLoraManager 不持久化，默认 false），
+// 而保存的窗口尺寸可能是上次展开时的大尺寸 → 打开后内容不满、底部空白。
+// 等首帧渲染稳定后自适应一次；分类/chips 是异步渲染，延迟再做一次兜底。
+onMounted(() => {
+  if (showLoraManager.value || !canAutoFitWindow.value) return
+  const run = () => {
+    if (!showLoraManager.value) fitWindowToCollapsedContent()
+  }
+  requestAnimationFrame(() => requestAnimationFrame(run))
+  setTimeout(run, 600)
+})
+
+// 内嵌 Lora 管理器的高度自适应由 lora_index.vue 自己管理（is-embedded 模式：
+// 还有数据未加载时撑满窗口内容区剩余空间，全部加载完后收缩到内容实际高度），
+// 这里不再写死/计算容器高度——此前在这里算固定高度，分类条目少时底部会留一大块空白。
 
 const resizeObserver = ref(null)
 
@@ -3337,6 +3857,11 @@ onUnmounted(() => {
 // 处理消息
 const handleMessage = (event) => {
   if (!isTrustedMessage(event)) return
+  // Lora 管理器里换了本地封面 → 失效 wlr 缩略图缓存并重新预取（否则堆/悬停缩略图一直是旧图）
+  if (event.data.type === 'weilin_prompt_ui_lora_cover_updated') {
+    refreshLoraCoverForFile(event.data.file)
+    return
+  }
   if (event.data.type === 'weilin_prompt_ui_insertTag') {
     // 在输入框末尾添加标签文本
     const currentText = inputText.value
@@ -3420,6 +3945,22 @@ const handleMessage = (event) => {
       lastInputValue.value = inputText.value; // 更新上一次的输入内容
       // 触发输入事件以更新词组
       processInput()
+    }
+  } else if (event.data.type === 'weilin_prompt_ui_lora_detail_closed') {
+    // lora 详情窗关闭：解除悬浮栏钉住（钉住是为"详情窗/信息浮窗存在时不自动消失"，
+    // 若浮窗同时开着则保留钉住），并触发一次常规的隐藏判定（不动 isOverTag——
+    // 鼠标此刻可能悬停在标签上，判定内部会自行排除）
+    loraDetailOpenedForCover = false
+    if (!showCoverCard.value) {
+      controlsPinned.value = false
+      pinnedTagIndex = null
+      scheduleHideCheck()
+    }
+  } else if (event.data.type === 'weilin_prompt_ui_lora_stack_sync_changed') {
+    // lora堆卡片权重同步开关被用户切换 → 更新本端 map（悬浮栏再悬停该 lora 时状态一致）
+    if (event.data.lora || event.data.name) {
+      loraSyncMap.value = { ...loraSyncMap.value, [wlrKey(event.data.lora || event.data.name)]: !!event.data.value };
+      persistLoraSyncMap();
     }
   }
 }
@@ -4051,6 +4592,8 @@ const adjustWeightByWheel = (event, which) => {
   if (which === 'weight') {
     applyWeight();
   } else {
+    // 滚轮改权重同样走同步联动
+    syncLoraWeights(which === 'loraModel' ? 'model' : 'text');
     applyLoraWeights();
   }
 };
@@ -4844,5 +5387,15 @@ defineExpose({
 body.weilin-dragging-cursor,
 body.weilin-dragging-cursor * {
     cursor: grabbing !important;
+}
+
+/* 74.93：Lora 管理模块展开（prompt-box 带 weilin-lora-embed-active）时，window-content 的
+   16px padding 会把内部 main-content 的滚动条往里推（右 16px、上下各 16px），与收起态
+   （滚动在 window-content 自身、滚动条贴窗口边、纵贯全窗口高）位置不一致。
+   此处把四边 padding 全部归零，main-content 右缘/上下缘即落到窗口边，滚动条与收起态同位。
+   那 16px 间隙改由 main-content 自身 padding 提供（padding 不会缩短滚动条轨道，故仍对齐）。
+   LoraStack 自带 inline padding-right:16px，不依赖此 padding，无副作用。 */
+.weilin_prompt_ui_window-content:has(.weilin-lora-embed-active) {
+    padding: 0;
 }
 </style>

@@ -80,6 +80,68 @@ def image_upload(post, image_save_function=None):
       api_response['status'] = '404'
       return api_response
 
+def set_cover_from_url(lora_file, url):
+  """Sets the cover for a lora by downloading a remote image server-side (bypasses browser CORS).
+  A local cover url (lorainfo/api/loras/img) means the previewed file already IS the cover — no-op."""
+  api_response = {'status': 200}
+  if not lora_file or not url:
+    api_response['status'] = '404'
+    api_response['error'] = 'missing file or url'
+    return api_response
+
+  lora_path = folder_paths.get_full_path("loras", lora_file)
+  if not lora_path or not path_exists(lora_path):
+    api_response['status'] = '404'
+    api_response['error'] = 'No Lora found at path'
+    return api_response
+
+  # 本地封面：预览的就是现有的封面文件本身，无需操作
+  if '/lorainfo/api/loras/img' in url:
+    api_response['res'] = 'success'
+    return api_response
+
+  if not (url.startswith('http://') or url.startswith('https://')):
+    api_response['status'] = '404'
+    api_response['error'] = 'Unsupported url'
+    return api_response
+
+  upload_dir = os.path.dirname(os.path.abspath(lora_path))
+  model = os.path.splitext(os.path.basename(lora_path))[0]
+
+  # 删除旧封面
+  for ext in ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp']:
+    try_path = f'{os.path.splitext(lora_path)[0]}.{ext}'
+    if path_exists(try_path):
+      os.remove(try_path)
+
+  # 服务端下载，按 Content-Type 修正扩展名
+  ext = os.path.splitext(urllib.parse.urlparse(url).path)[1].lower()
+  if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov']:
+    ext = ''
+  resp = requests.get(url, stream=True, timeout=(5, 30))
+  resp.raise_for_status()
+  content_type = resp.headers.get('Content-Type', '').lower()
+  if 'video' in content_type or 'mp4' in content_type:
+    ext = '.mp4'
+  elif 'image/jpeg' in content_type or 'image/jpg' in content_type:
+    ext = '.jpg'
+  elif 'image/png' in content_type:
+    ext = '.png'
+  elif 'image/gif' in content_type:
+    ext = '.gif'
+  elif 'image/webp' in content_type:
+    ext = '.webp'
+  elif not ext:
+    ext = '.jpg'
+
+  filepath = os.path.join(upload_dir, model + ext)
+  with open(filepath, 'wb') as f:
+    for chunk in resp.iter_content(chunk_size=8192):
+      f.write(chunk)
+
+  api_response['res'] = 'success'
+  return api_response
+
 def get_param(request, param, default=None):
   """Gets a param from a request."""
   if param in request.rel_url.query:
@@ -253,7 +315,10 @@ async def get_model_info(file: str,
     file_lower = img_next_to_file.lower()
     is_video = file_lower.endswith('.mp4') or file_lower.endswith('.preview.mp4')
     # 为mp4添加fmt=mp4参数，让前端能正确识别
-    img_next_to_file_url = f'/weilin/prompt_ui/api/lorainfo/api/loras/img?file={urllib.parse.quote(file, safe="")}{"&fmt=mp4" if is_video else ""}'
+    # 追加 mtime 缓存戳：更换封面后文件 mtime 变化→URL 变化→浏览器不再用旧缓存，
+    # 解决"换图封面不刷新/需关闭重开"以及"图片封面不更新、视频封面更新"的问题
+    cover_mtime = int(os.path.getmtime(img_next_to_file))
+    img_next_to_file_url = f'/weilin/prompt_ui/api/lorainfo/api/loras/img?file={urllib.parse.quote(file, safe="")}{"&fmt=mp4" if is_video else ""}&t={cover_mtime}'
     info_data['images'] = [img for img in info_data['images'] if 'lorainfo/api/loras/img' not in img.get('url', '')]
     img_data = {'url': img_next_to_file_url}
     if is_video:

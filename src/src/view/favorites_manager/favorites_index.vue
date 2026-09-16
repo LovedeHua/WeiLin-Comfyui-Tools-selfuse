@@ -88,90 +88,6 @@
             </li>
         </ul>
 
-        <!-- 标签对话框 -->
-        <div v-if="showTagDialog" class="weilin-tools-dialog-overlay" @contextmenu="favHandleTagDialogContextMenu">
-            <div class="weilin-tools-dialog-content" @mousedown.stop>
-                <div class="weilin-tools-dialog-header">
-                    <h2>{{ isEditingTag ? t('history.dialog.edit_tag') : t('history.dialog.add_tag') }}</h2>
-                    <button class="close-btn" @click="closeTagDialog">×</button>
-                </div>
-                <div class="weilin-tools-dialog-body">
-                    <div class="form-group">
-                        <label>{{ t('history.dialog.name') }}</label>
-                        <input type="text" v-model="currentTag.name" ref="nameInputRef"
-                            :placeholder="t('history.dialog.name_placeholder')"
-                            @keydown.enter.prevent="focusTagTextarea">
-                    </div>
-                    <div class="form-group tag-input-group">
-                        <label class="label-row">
-                            <span>{{ t('history.dialog.tag') }}</span>
-                            <span class="char-count">{{ t('history.dialog.token_count', { n: tokenCount }) }}</span>
-                        </label>
-                        <textarea v-model="currentTag.tag" ref="tagTextareaRef" spellcheck="false"
-                            :placeholder="t('history.dialog.tag_placeholder')" rows="12"
-                            @input="favHandleInput" @keydown="favTextareaKeydown"
-                            @keydown.ctrl.enter.prevent="saveTag" @click="favCloseAutocomplete"></textarea>
-                        <!-- 标签自动补全下拉（移植主编辑器：标签库 + embeddings，定位跟随光标 left+top） -->
-                        <div class="fav-autocomplete" ref="favAutocompleteRef" v-show="favShowAutocomplete"
-                            :style="{ top: favAutocompleteTop + 'px', left: favAutocompleteLeft + 'px' }">
-                            <div v-for="(item, index) in favAutocompleteResults" :key="index"
-                                class="fav-autocomplete-item" :class="{ selected: index === favSelectedIndex }"
-                                @mouseenter="favSelectedIndex = index" @mousedown.prevent
-                                @click.stop="favSelectAutocomplete(index, $event)">
-                                <span class="tag">{{ item.text }}</span>
-                                <span class="desc" v-if="item.desc">{{ item.desc }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>{{ t('history.dialog.follow_lora') }}</label>
-                        <div class="lora-tags" v-if="editingLoras.length > 0">
-                            <span class="lora-chip lora-chip-editable" v-for="(lora, i) in editingLoras"
-                                :key="i" :class="{ 'lora-chip-missing': isLoraMissing(lora.name) }"
-                                :title="lora.name + (isLoraMissing(lora.name) ? '（' + t('history.dialog.lora_missing') + '）' : '')">
-                                <span class="lora-chip-name">{{ loraDisplayName(lora.name) }}</span>
-                                <button class="lora-chip-remove" :title="t('common.delete')"
-                                    @click="removeLoraFromTag(lora.name)">×</button>
-                            </span>
-                        </div>
-                        <div class="lora-empty" v-else>{{ t('history.dialog.no_lora') }}</div>
-                        <div class="lora-add-row">
-                            <input type="text" class="lora-add-input" v-model="loraSearchQuery"
-                                :placeholder="t('history.dialog.lora_search_placeholder')"
-                                @input="searchLoraCandidates"
-                                @keydown.esc.prevent="loraCandidates = []">
-                            <ul class="lora-candidates" v-if="loraCandidates.length > 0">
-                                <li class="lora-candidate" v-for="path in loraCandidates" :key="path"
-                                    :title="path" @mousedown.prevent
-                                    @click="addLoraToTag(path)">{{ loraDisplayName(path) }}</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>{{ t('history.dialog.background_color') }}</label>
-                        <div class="color-picker">
-                            <div class="color-preview" :style="{ backgroundColor: previewColor }">
-                            </div>
-                            <div class="color-controls">
-                                <input type="color" v-model="colorPickerState.hex" @input="updateColor"
-                                    class="color-input">
-                                <div class="alpha-control">
-                                    <input type="range" v-model.number="colorPickerState.alpha" min="0" max="100"
-                                        @input="updateColor" class="alpha-slider">
-                                    <span class="alpha-value">{{ colorPickerState.alpha }}%</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="weilin-tools-dialog-footer">
-                    <span class="footer-hint">{{ t('history.dialog.save_hint') }}</span>
-                    <button class="cancel-btn" @click="closeTagDialog">{{ t('common.cancel') }}</button>
-                    <button class="confirm-btn" @click="saveTag">{{ t('common.confirm') }}</button>
-                </div>
-            </div>
-        </div>
-
         <!-- 确认删除对话框 -->
         <div v-if="showDeleteDialog" class="weilin-tools-dialog-overlay">
             <div class="weilin-tools-dialog-content confirm-weilin-tools-dialog" @mousedown.stop>
@@ -195,7 +111,6 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import { historyApi } from "@/api/history";
 import { loraApi } from "@/api/lora";
-import { autocompleteApi } from "@/api/autocomplete";
 import message from "@/utils/message";
 import { useI18n } from 'vue-i18n'
 
@@ -204,46 +119,11 @@ const searchQuery = ref('');
 const favorites = ref([]); // 存储收藏夹记录
 const filteredFavorites = ref([]); // 存储过滤后的收藏夹记录
 const selectedTags = ref([]);
-const showTagDialog = ref(false)
 const showDeleteDialog = ref(false)
-const isEditingTag = ref(false)
-const colorPickerState = ref({
-    hex: 'rgba(255, 123, 2, .4)',
-    alpha: 100
-})
-const currentTag = ref({
-    name: '',
-    tag: '',
-    color: 'rgba(255, 123, 2, .4)'
-})
-
-// 对话框打开后自动聚焦：编辑模式聚焦标签内容区，新增模式聚焦名称框
-const nameInputRef = ref(null)
-const tagTextareaRef = ref(null)
-const focusTagTextarea = () => {
-    tagTextareaRef.value?.focus()
-}
-watch(showTagDialog, (visible) => {
-    if (!visible) return
-    nextTick(() => {
-        if (isEditingTag.value) {
-            tagTextareaRef.value?.focus()
-        } else {
-            nameInputRef.value?.focus()
-        }
-    })
-})
 
 const isDeleteBatch = ref(false)
 const selectAllTags = ref(0)
 
-// token 计数：与主编辑器 calculateTokens 同口径（按空白分词），保证两处数字一致
-const calculateTokens = (text) => {
-    if (!text) return 0
-    const trimmed = text.trim()
-    return trimmed ? trimmed.split(/\s+/).length : 0
-}
-const tokenCount = computed(() => calculateTokens(currentTag.value.tag))
 
 // 列表渲染缓存：同一 tag 的 JSON 解析只做一次（避免每次渲染重复 parse 卡顿）
 const promptInfoCache = new Map()
@@ -303,529 +183,31 @@ const refreshLoraExistence = (names) => {
         .catch(() => { }) // 检测失败静默：不标红（宁可不提示也不误报）
 }
 
-// 编辑对话框中的跟随 Lora：独立编辑态，保存时写回 lora 字段（取代旧的 _parsed 只读依赖）
-const editingLoras = ref([])
-const loraSearchQuery = ref('')
-const loraCandidates = ref([])
-const loraSearching = ref(false)
-let loraSearchTimer = null
 
-const resetLoraEditState = () => {
-    editingLoras.value = []
-    loraSearchQuery.value = ''
-    loraCandidates.value = []
-    loraSearching.value = false
-    if (loraSearchTimer) {
-        clearTimeout(loraSearchTimer)
-        loraSearchTimer = null
-    }
+
+
+// 打开收藏编辑/新增独立窗口（原模态对话框窗口化，表单在 favorite_edit_window.vue）。
+// 数据传递用组件事件（emit 引用直传）而非 postMessage：postMessage 的结构化克隆既不接受
+// reactive Proxy（会抛 DataCloneError），实测普通对象负载也会丢失 item（open 收到 null 走新增模式）
+const emit = defineEmits(['edit-favorite'])
+const openFavoriteEditWindow = (item) => {
+    console.log('[WeiLin] 编辑窗口请求, item =', item ? { id_index: item.id_index, name: item.name, tagLen: (item.tag || '').length } : null)
+    emit('edit-favorite', item || null)
 }
 
-// 删除跟随的 Lora（按 name 匹配）
-const removeLoraFromTag = (name) => {
-    editingLoras.value = editingLoras.value.filter(l => l.name !== name)
-}
-
-// 添加候选路径为跟随 Lora（查重后 push，元素结构与编辑器 addLora 同源：
-// {name: 完整路径, weight: 1, text_encoder_weight: 1}，见 lora_stack.vue）
-const addLoraToTag = (path) => {
-    if (!path) return
-    if (!editingLoras.value.some(l => l.name === path)) {
-        editingLoras.value.push({ name: path, weight: 1, text_encoder_weight: 1 })
-    }
-    loraExistMap.value = { ...loraExistMap.value, [path]: true } // 候选来自实时目录列表，必存在
-    loraSearchQuery.value = ''
-    loraCandidates.value = []
-}
-
-// 防抖搜索 Lora 候选（POST /get_lora_list_by_search 返回路径字符串数组，过滤已添加取前 8 条）
-const searchLoraCandidates = () => {
-    if (loraSearchTimer) clearTimeout(loraSearchTimer)
-    const query = loraSearchQuery.value.trim()
-    if (!query) {
-        loraCandidates.value = []
-        loraSearching.value = false
-        return
-    }
-    loraSearchTimer = setTimeout(() => {
-        loraSearching.value = true
-        loraApi.searchLoraGetFolderList(query)
-            .then((res) => {
-                const list = Array.isArray(res?.data) ? res.data : []
-                loraCandidates.value = list
-                    .filter(p => !editingLoras.value.some(l => l.name === p))
-                    .slice(0, 8)
-            })
-            .catch(() => {
-                loraCandidates.value = []
-            })
-            .finally(() => {
-                loraSearching.value = false
-            })
-    }, 300)
-}
-
-// ===== 标签编辑框自动补全（移植自 prompt_index.vue：防抖 150ms + 请求序号 + Map 缓存 + embeddings 前缀）=====
-const AUTOCOMPLETE_DEBOUNCE_MS = 150
-const AUTOCOMPLETE_CACHE_MAX = 100
-const AUTOCOMPLETE_EMBEDDING_MAX = 50
-const AUTOCOMPLETE_EMBEDDING_MIX_MAX = 10
-const AUTOCOMPLETE_MAX_WIDTH = 380 // 下拉最大宽度（px），与 CSS max-width 保持一致
-const favAutocompleteRef = ref(null)
-const favShowAutocomplete = ref(false)
-const favAutocompleteResults = ref([])
-const favSelectedIndex = ref(0)
-const favAutocompleteTop = ref(0)
-const favAutocompleteLeft = ref(0)
-let favAutocompleteTimer = null
-let favAutocompleteSeq = 0 // 请求序号，过期响应丢弃
-const favAutocompleteCache = new Map()
-let favEmbeddingsCache = null
-let favEmbeddingsFetchFailedAt = 0 // 失败冷却：30s 内不重试，避免失败被永久缓存为空列表后每次输入都静默失败
-let favSelectedItemEl = null
-
-// embeddings 数据源：主用插件自身端点（与标签库接口同链路，可达性与 tag 补全一致），
-// 失败时回退 ComfyUI 原生 /api/embeddings（裸 /embeddings 被第三方扩展页面占用，勿用）
-const fetchFavEmbeddings = async () => {
-    if (favEmbeddingsCache !== null) return favEmbeddingsCache
-    if (Date.now() - favEmbeddingsFetchFailedAt < 30000) return []
-    try {
-        let list = null
-        try {
-            const res = await autocompleteApi.getEmbeddingsList()
-            list = Array.isArray(res.data) ? res.data : null
-        } catch (e) {
-            console.warn('[WeiLin] 插件端点获取 embeddings 失败，回退原生 /api/embeddings:', e)
-        }
-        if (list === null) {
-            const res = await fetch('/api/embeddings')
-            if (!res.ok) throw new Error('HTTP ' + res.status)
-            const raw = await res.json()
-            list = Array.isArray(raw) ? raw : []
-        }
-        favEmbeddingsCache = list.filter(n => typeof n === 'string')
-        if (favEmbeddingsCache.length === 0) {
-            console.warn('[WeiLin] embeddings 列表为空——请确认 ComfyUI 的 models/embeddings 目录非空')
-        }
-    } catch (e) {
-        console.warn('[WeiLin] 获取 embeddings 列表失败:', e)
-        favEmbeddingsFetchFailedAt = Date.now()
-        return []
-    }
-    return favEmbeddingsCache
-}
-
-// ===== 诊断：ComfyUI 页面控制台执行 window.weilinEmbeddingDiag() =====
-// 报告插件端点与原生 /api/embeddings 两个数据源的可达性、条数与 lazy 命中样本，用于定位 embedding 补全失效
-const weilinEmbeddingDiag = async () => {
-    const report = { cacheCount: favEmbeddingsCache === null ? '未加载' : favEmbeddingsCache.length, cooldown30s: Date.now() - favEmbeddingsFetchFailedAt < 30000 }
-    try {
-        const res = await autocompleteApi.getEmbeddingsList()
-        report.pluginEndpoint = { ok: true, count: Array.isArray(res.data) ? res.data.length : -1 }
-    } catch (e) {
-        report.pluginEndpoint = { ok: false, error: String(e) }
-    }
-    try {
-        const res = await fetch('/api/embeddings')
-        const raw = await res.json()
-        report.nativeEndpoint = { status: res.status, count: Array.isArray(raw) ? raw.length : -1, sample: Array.isArray(raw) ? raw.slice(0, 5) : [] }
-    } catch (e) {
-        report.nativeEndpoint = { ok: false, error: String(e) }
-    }
-    console.log('[WeiLin] embedding 数据链路诊断:', report)
-    return report
-}
-if (typeof window !== 'undefined') window.weilinEmbeddingDiag = weilinEmbeddingDiag
-
-// 普通输入混入 embeddings 候选（同主编辑器 buildEmbeddingTail：正斜杠归一化比对，插入保留原名）
-const buildFavEmbeddingTail = async (lowerQuery) => {
-    const list = await fetchFavEmbeddings()
-    return list
-        .filter(name => name.replace(/\\/g, '/').toLowerCase().includes(lowerQuery))
-        .slice(0, AUTOCOMPLETE_EMBEDDING_MIX_MAX)
-        .map(name => ({ text: 'embedding:' + name, desc: 'embedding', isEmbedding: true }))
-}
-
-// 权重语法剥离（同主编辑器 extractText：lora名:0.8 → lora名）
-const favExtractText = (input) => {
-    const match = input.match(/([^:]+):[\d.]+/)
-    return match ? match[1] : input
-}
-
-const favCloseAutocomplete = () => {
-    favShowAutocomplete.value = false
-}
-
-// 关闭对话框时清空补全状态（缓存保留）
-const resetFavAutocomplete = () => {
-    if (favAutocompleteTimer) {
-        clearTimeout(favAutocompleteTimer)
-        favAutocompleteTimer = null
-    }
-    favAutocompleteSeq++
-    favShowAutocomplete.value = false
-    favAutocompleteResults.value = []
-}
-
-// 编辑对话框右键：有选中文字时完全放行原生菜单（复制场景，不关闭任何窗口）；
-// 无选区时 preventDefault 后：有补全浮窗优先只关浮窗，否则关闭整个对话框。
-// 选区检测分两路：输入框用自身 selectionStart/End（window.getSelection 对其内部选区返回空）
-const favHandleTagDialogContextMenu = (event) => {
-    const t = event.target
-    let hasSelection = false
-    if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT')) {
-        hasSelection = typeof t.selectionStart === 'number' && typeof t.selectionEnd === 'number' && t.selectionStart !== t.selectionEnd
-    } else {
-        const sel = typeof window.getSelection === 'function' ? window.getSelection() : null
-        hasSelection = !!(sel && !sel.isCollapsed && String(sel))
-    }
-    if (hasSelection) return
-    event.preventDefault()
-    if (favShowAutocomplete.value) {
-        favCloseAutocomplete()
-    } else {
-        closeTagDialog()
-    }
-}
-
-// 光标前的当前单词（以逗号/空白为界）
-const favGetCurrentWord = () => {
-    const textarea = tagTextareaRef.value
-    if (!textarea) return { word: '', start: 0, end: 0 }
-    const pos = textarea.selectionStart
-    const text = textarea.value || ''
-    let start = pos
-    while (start > 0 && !/[,\s]/.test(text[start - 1])) start--
-    return { word: text.substring(start, pos), start, end: pos }
-}
-
-// 镜像 div 测量光标位置（left+top：下拉跟随光标列，不再全宽锚定行首）
-const favCalculatePosition = async () => {
-    const textarea = tagTextareaRef.value
-    if (!textarea || !textarea.parentNode) return
-    const cursorPos = textarea.selectionStart
-    await nextTick()
-    const mirror = document.createElement('div')
-    const style = mirror.style
-    style.position = 'absolute'
-    style.top = '0'
-    style.left = '0'
-    style.visibility = 'hidden'
-    style.whiteSpace = 'pre-wrap'
-    style.wordWrap = 'break-word'
-    const cs = window.getComputedStyle(textarea)
-    style.width = cs.width
-    style.font = cs.font
-    style.padding = cs.padding
-    style.lineHeight = cs.lineHeight
-    mirror.appendChild(document.createTextNode(textarea.value.substring(0, cursorPos)))
-    const cursorNode = document.createElement('span')
-    cursorNode.textContent = '|'
-    mirror.appendChild(cursorNode)
-    textarea.parentNode.appendChild(mirror)
-    const cursorRect = cursorNode.getBoundingClientRect()
-    const parentRect = textarea.parentNode.getBoundingClientRect()
-    // 水平跟随光标列；超出容器右缘时向左收（AUTOCOMPLETE_MAX_WIDTH 与 CSS max-width 一致）
-    let left = cursorRect.left - parentRect.left
-    const maxLeft = parentRect.width - AUTOCOMPLETE_MAX_WIDTH
-    if (maxLeft > 0 && left > maxLeft) left = maxLeft
-    if (left < 0) left = 0
-    const top = cursorRect.bottom - parentRect.top + 2
-    textarea.parentNode.removeChild(mirror)
-    favAutocompleteLeft.value = left
-    favAutocompleteTop.value = top
-}
-
-// 去重（74.23）：按候选文本小写归一化，保留首个出现（同主编辑器 dedupeAutocompleteResults）
-const favDedupeResults = (results) => {
-    const seen = new Set()
-    return (results || []).filter(item => {
-        if (!item || !item.text) return false
-        const key = String(item.text).toLowerCase()
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-    })
-}
-
-const favApplyResults = async (results) => {
-    favAutocompleteResults.value = favDedupeResults(results)
-    if (favAutocompleteResults.value.length > 0) {
-        await favCalculatePosition()
-    }
-    favShowAutocomplete.value = favAutocompleteResults.value.length > 0
-    favSelectedIndex.value = 0
-}
-
-const favScrollToSelected = () => {
-    nextTick(() => {
-        const container = favAutocompleteRef.value
-        if (!container) return
-        const el = container.querySelector('.fav-autocomplete-item.selected')
-        if (el) el.scrollIntoView({ block: 'nearest' })
-    })
-}
-
-const favTriggerAutocomplete = (rawWord) => {
-    let cleaned = rawWord.replace(/[\[\]{}]/g, '').trim()
-
-    // embedding 前缀检测必须在 extractText 之前（权重正则会截断数字开头的 embedding 名）；
-    // 兼容全角冒号（embedding：），中文输入法下冒号易被打成全角导致前缀检测失败；
-    // 裸词 "embedding"（还没打冒号）也直接列出 embedding 候选，不必等冒号敲下
-    // 裸词修复（74.22）：旧正则要求整段恰等于 "embedding"，裸词弹出全量列表后
-    // 继续输入名字即失配掉回 tag 路径（实际仍需冒号才能筛选）。
-    // 放宽为 embedding 前缀 + 可选冒号 + 任意后缀，裸词后续输入持续过滤
-    const embeddingPrefixMatch = cleaned.match(/^embedding[:：]?(.*)$/i)
-    if (embeddingPrefixMatch) {
-        if (favAutocompleteTimer) {
-            clearTimeout(favAutocompleteTimer)
-            favAutocompleteTimer = null
-        }
-        favAutocompleteSeq++
-        const filter = (embeddingPrefixMatch[1] || '').trim().toLowerCase()
-        fetchFavEmbeddings().then((list) => {
-            const matched = list
-                .filter(name => name.replace(/\\/g, '/').toLowerCase().includes(filter))
-                .slice(0, AUTOCOMPLETE_EMBEDDING_MAX)
-                .map(name => ({ text: 'embedding:' + name, desc: 'embedding', isEmbedding: true }))
-            favApplyResults(matched)
-        }).catch((e) => {
-            console.warn('[WeiLin] embedding 前缀补全失败:', e)
-        })
-        return
-    }
-
-    const text = favExtractText(cleaned).trim()
-    // 空或过长：关闭并作废在途请求
-    if (!text || text.length > 20) {
-        if (favAutocompleteTimer) {
-            clearTimeout(favAutocompleteTimer)
-            favAutocompleteTimer = null
-        }
-        favAutocompleteSeq++
-        favShowAutocomplete.value = false
-        return
-    }
-
-    const lowerInput = text.toLowerCase()
-    // 命中缓存直接显示
-    if (favAutocompleteCache.has(lowerInput)) {
-        favAutocompleteSeq++
-        favApplyResults(favAutocompleteCache.get(lowerInput))
-        return
-    }
-
-    if (favAutocompleteTimer) clearTimeout(favAutocompleteTimer)
-    favAutocompleteTimer = setTimeout(async () => {
-        favAutocompleteTimer = null
-        const seq = ++favAutocompleteSeq
-        try {
-            const res = await autocompleteApi.getAutocomplete(String(lowerInput))
-            if (seq !== favAutocompleteSeq) return
-            const results = res.data || []
-            // 混入 embedding 候选（普通输入也能看到 embedding；缓存同存合并结果，命中缓存时行为一致）
-            const embeddingTail = await buildFavEmbeddingTail(lowerInput)
-            if (seq !== favAutocompleteSeq) return
-            const mergedResults = results.concat(embeddingTail)
-            if (favAutocompleteCache.size >= AUTOCOMPLETE_CACHE_MAX) {
-                const firstKey = favAutocompleteCache.keys().next().value
-                favAutocompleteCache.delete(firstKey)
-            }
-            favAutocompleteCache.set(lowerInput, mergedResults)
-            await favApplyResults(mergedResults)
-        } catch (error) {
-            if (seq === favAutocompleteSeq) {
-                favShowAutocomplete.value = false
-            }
-        }
-    }, AUTOCOMPLETE_DEBOUNCE_MS)
-}
-
-const favHandleInput = () => {
-    const { word } = favGetCurrentWord()
-    if (word.trim()) {
-        favTriggerAutocomplete(word)
-    } else {
-        favCloseAutocomplete()
-    }
-}
-
-const favTextareaKeydown = (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return // Ctrl+Enter 保存等组合键放行
-    if (!favShowAutocomplete.value) return
-    if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        favSelectedIndex.value = Math.min(favSelectedIndex.value + 1, favAutocompleteResults.value.length - 1)
-        favScrollToSelected()
-    } else if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        favSelectedIndex.value = Math.max(favSelectedIndex.value - 1, 0)
-        favScrollToSelected()
-    } else if (event.key === 'Tab' || event.key === 'Enter') {
-        event.preventDefault()
-        favSelectAutocomplete(favSelectedIndex.value, null)
-    } else if (event.key === 'Escape') {
-        event.preventDefault()
-        favCloseAutocomplete()
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
-        favCloseAutocomplete()
-    }
-}
-
-// 选中补全项：替换光标前单词并追加 ", "（同主编辑器，格式转换读同一批 localStorage 开关；
-// embedding 文件名跳过全部转换，否则下划线转空格/括号转义会毁文件名）
-const favSelectAutocomplete = (index, event) => {
-    if (event) {
-        event.preventDefault()
-        event.stopPropagation()
-    }
-    const item = favAutocompleteResults.value[index]
-    if (!item) return
-    favShowAutocomplete.value = false
-    const textarea = tagTextareaRef.value
-    if (!textarea) return
-
-    const currentText = currentTag.value.tag || ''
-    const cursorPosition = textarea.selectionStart
-    const cursorEnd = textarea.selectionEnd
-
-    let tagText = item.text
-    if (!item.isEmbedding) {
-        if (localStorage.getItem('weilin_prompt_ui_comma_conversion') !== 'false') {
-            tagText = tagText.replace(/，/g, ',')
-        }
-        if (localStorage.getItem('weilin_prompt_ui_period_conversion') !== 'false') {
-            tagText = tagText.replace(/。/g, '.')
-        }
-        if (localStorage.getItem('weilin_prompt_ui_bracket_conversion') !== 'false') {
-            tagText = tagText.replace(/【/g, '[').replace(/】/g, ']').replace(/（/g, '(').replace(/）/g, ')')
-        }
-        if (localStorage.getItem('weilin_prompt_ui_angle_bracket_conversion') !== 'false') {
-            tagText = tagText.replace(/《/g, '<').replace(/》/g, '>')
-        }
-        if (localStorage.getItem('weilin_prompt_ui_underscore_to_bracket') === 'true') {
-            tagText = tagText.replace(/_/g, ' ')
-        }
-        if (localStorage.getItem('weilin_prompt_ui_bracket_escape') === 'true') {
-            tagText = tagText.replace(/\(([^)]+)\)/g, '\\($1\\)')
-        }
-    }
-
-    // 向前找单词边界替换，插入后光标停在 ", " 之后
-    let replaceStart = cursorPosition
-    while (replaceStart > 0 && !/[,\s]/.test(currentText[replaceStart - 1])) {
-        replaceStart--
-    }
-    const newText = currentText.substring(0, replaceStart) + tagText + ', ' + currentText.substring(cursorEnd)
-    const newCursorPosition = replaceStart + tagText.length + 2
-
-    currentTag.value.tag = newText
-    nextTick(() => {
-        if (tagTextareaRef.value) {
-            tagTextareaRef.value.selectionStart = newCursorPosition
-            tagTextareaRef.value.selectionEnd = newCursorPosition
-            tagTextareaRef.value.focus()
-        }
-    })
-}
-
-// 点击补全容器/输入框以外区域时关闭（候选项用 click.stop 不冒泡，不会误关）
-const favHandleDocClick = (event) => {
-    if (!favShowAutocomplete.value) return
-    const container = favAutocompleteRef.value
-    if (container && container.contains(event.target)) return
-    if (tagTextareaRef.value && tagTextareaRef.value === event.target) return
-    favCloseAutocomplete()
-}
-
-// 改进的 RGBA 解析函数
-const parseRgba = (rgba) => {
-    if (!rgba || rgba === 'transparent') {
-        return { hex: '#FFFFFF', alpha: 0 }
-    }
-
-    const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/)
-    if (match) {
-        const [, r, g, b, a] = match
-        const hex = '#' + [r, g, b].map(x => {
-            const hex = parseInt(x).toString(16)
-            return hex.length === 1 ? '0' + hex : hex
-        }).join('')
-
-        return {
-            hex: hex,
-            alpha: Math.round((a || 1) * 100)
-        }
-    }
-    return { hex: '#FFFFFF', alpha: 0 }
-}
-
-// 初始化颜色选择器
-const initColorPicker = (color) => {
-    const { hex, alpha } = parseRgba(color)
-    colorPickerState.value = { hex, alpha }
-}
-
-// 显示添加标签对话框
 const showAddTagDialog = () => {
-    isEditingTag.value = false
-    currentTag.value = {
-        id: '',
-        name: '',
-        tag: '',
-        backgroundColor: 'transparent' // 设置默认颜色
-    }
-    resetLoraEditState()
-    // 初始化颜色选择器
-    initColorPicker('transparent')
-    showTagDialog.value = true
-}
-
-const rgbaToColorPickerState = (rgba) => {
-    const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/);
-    if (match) {
-        const [, r, g, b, a] = match;
-        const hex = `#${((1 << 24) + (parseInt(r) << 16) + (parseInt(g) << 8) + parseInt(b)).toString(16).slice(1)}`;
-        const alpha = a ? Math.round(parseFloat(a) * 100) : 100; // 将 alpha 转换为百分比
-        return { hex, alpha };
-    }
-    return { hex: '#FF7B02', alpha: 50 }; // 默认值
-};
-
-// 编辑标签
-const editTag = (tag) => {
-    isEditingTag.value = true
-    currentTag.value = { ...tag }
-    // 显示层精简：编辑框只显示纯提示词文本；lora 字段进入独立编辑态，保存时统一重建 {prompt, lora}
-    resetLoraEditState()
-    const info = extractPromptInfo(tag.tag)
-    currentTag.value.tag = info.prompt
-    editingLoras.value = Array.isArray(info.lora) ? info.lora : []
-    refreshLoraExistence(getLoraNames(editingLoras.value))
-    colorPickerState.value = rgbaToColorPickerState(tag.color)
-    showTagDialog.value = true
+    openFavoriteEditWindow(null)
 }
 
 
-// 更新颜色
-const updateColor = () => {
-  const color = hexToRgba(colorPickerState.value.hex, colorPickerState.value.alpha)
-  currentTag.value.color = color
+// 编辑收藏：打开独立编辑窗口并传入整条收藏
+const editTag = (item) => {
+    openFavoriteEditWindow(item)
 }
 
 
-// 关闭标签对话框
-const closeTagDialog = () => {
-    showTagDialog.value = false
-    currentTag.value = {
-        name: '',
-        tag: '',
-        color: 'rgba(255, 123, 2, .4)'
-    }
-    resetLoraEditState()
-    resetFavAutocomplete()
-    isEditingTag.value = false
-}
+
+
 
 const deleteType = ref('')
 const itemToDelete = ref(null)
@@ -917,13 +299,6 @@ const selectAllTagsChange = (event) => {
     }
 }
 
-// 改进的 RGBA 转换函数
-const hexToRgba = (hex, alpha) => {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha / 100})`
-}
 
 // 关闭删除对话框
 const closeDeleteDialog = () => {
@@ -946,64 +321,6 @@ const formatRelativeTime = (unixSeconds) => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// 保存标签
-const saveTag = () => {
-    if (!currentTag.value.tag) {
-        message({ type: "warn", str: 'history.dialog.tag_placeholder' });
-        return
-    }
-
-    // 方案 A（存储精简）：统一存 {prompt, lora}，剥离 temp_prompt/temp_lora（token 颜色/ID 等编辑器状态）；
-    // 旧收藏存储不动，每编辑保存一次自动迁移为新格式；lora 为编辑对话框中增删后的结果
-    const tagToSave = JSON.stringify({
-        prompt: currentTag.value.tag,
-        lora: editingLoras.value.length > 0 ? editingLoras.value : ""
-    })
-
-    if (isEditingTag.value) {
-        historyApi
-            .editFavorite({
-                id_index: currentTag.value.id_index,
-                name: currentTag.value.name,
-                tag: tagToSave,
-                color: currentTag.value.color,
-            })
-            .then((res) => {
-                fetchFavorites()
-                window.postMessage({
-                    type: 'weilin_prompt_ui_refresh_all_data',
-                }, '*')
-                message({ type: "success", str: 'message.editSuccess' });
-            })
-            .catch((err) => {
-                message({ type: "warn", str: 'message.networkError' });
-            });
-    } else {
-        historyApi
-            .addFavorite({
-                name: currentTag.value.name,
-                tag: tagToSave,
-                color: currentTag.value.color,
-            })
-            .then((res) => {
-                // 后端去重：tag 完全一致的收藏已存在时不重复插入，返回 existed 标记
-                if (res && res.data && res.data.existed) {
-                    message({ type: "warn", str: 'message.addFavoriteIsExist' });
-                } else {
-                    message({ type: "success", str: 'message.addSuccess' });
-                }
-                fetchFavorites()
-                window.postMessage({
-                    type: 'weilin_prompt_ui_refresh_all_data',
-                }, '*')
-            })
-            .catch((err) => {
-                message({ type: "warn", str: 'message.networkError' });
-            });
-    }
-
-    closeTagDialog()
-}
 
 
 const fetchFavorites = () => {
@@ -1071,12 +388,10 @@ const handleWindowMessage = (event) => {
 onMounted(() => {
     fetchFavorites();
     window.addEventListener('message', handleWindowMessage)
-    document.addEventListener('click', favHandleDocClick)
 });
 
 onUnmounted(() => {
     window.removeEventListener('message', handleWindowMessage)
-    document.removeEventListener('click', favHandleDocClick)
 })
 </script>
 

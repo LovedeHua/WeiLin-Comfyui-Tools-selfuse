@@ -61,6 +61,15 @@ export const loraApi = {
       })
   },
 
+  // 通过 URL 设置 Lora 封面（后端代下，绕过浏览器 CORS）
+  postSetCoverByUrl: async (file, url) => {
+    return await request({
+        url: "/lorainfo/api/loras/set/img/url",
+        method: 'post',
+        data: { file, url }
+      })
+  },
+
   // 保存Lora信息
   postLoraSave: async (file,json) => {
     const body = new FormData();
@@ -111,6 +120,14 @@ export const loraApi = {
   checkLoraExists: async (names) => {
     return await request({
       url: '/check_lora_exists',
+      method: 'post',
+      data:{ names }
+    })
+  },
+  // 批量获取 Lora 本地封面缩略图（names → {name: base64 dataURL | null}，无封面为 null）
+  checkLoraPreviews: async (names) => {
+    return await request({
+      url: '/check_lora_previews',
       method: 'post',
       data:{ names }
     })

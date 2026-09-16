@@ -482,7 +482,8 @@ defineExpose({
     display: flex;
     flex-direction: column;
     min-width: 600px;
-    background-color: var(--weilin-prompt-ui-primary-bg);
+    /* 窗口底色由 DraggableWindow 根统一画一层（rgba 调色板下多层叠加会变实心） */
+    background-color: transparent;
     color: var(--weilin-prompt-ui-primary-text);
     padding-bottom: 20px;
     box-sizing: border-box;

@@ -112,18 +112,33 @@
                                 </td>
                             </tr>
 
-                            <!-- 基础模型 -->
-                            <tr>
+                            <!-- 基础模型（可编辑：编辑 baseModel 主体名；baseModelFile 来自 metadata 只读展示） -->
+                            <tr :class="{ 'is-editing': isEditing.baseModel }">
                                 <td class="label">{{ t('lora.baseModel') }}</td>
-                                <td colspan="2">{{
-                                    !loraInfo.baseModelFile && !loraInfo.baseModelFile
-                                        ? ""
-                                        : (loraInfo.baseModel || "") +
-                                        (loraInfo.baseModelFile
-                                            ? `
+                                <td>
+                                    <input v-if="isEditing.baseModel" v-model="editValues.baseModel" type="text"
+                                        @keyup.enter="saveEdit('baseModel')" @keyup.esc="cancelEdit('baseModel')" />
+                                    <span v-else class="text">{{
+                                        !loraInfo.baseModelFile && !loraInfo.baseModel
+                                            ? ""
+                                            : (loraInfo.baseModel || "") +
+                                            (loraInfo.baseModelFile
+                                                ? `
                                     (${loraInfo.baseModelFile})`
-                                            : "")
-                                }}</td>
+                                                : "")
+                                    }}</span>
+                                </td>
+                                <td class="actions">
+                                    <button class="edit-btn" @click="toggleEdit('baseModel')"
+                                        :title="t('promptBox.settings.edit')">
+                                        <svg class="svg-icon" viewBox="0 0 24 24" width="16" height="16">
+                                            <path v-if="isEditing.baseModel"
+                                                d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                                            <path v-else
+                                                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                                        </svg>
+                                    </button>
+                                </td>
                             </tr>
 
                             <!-- 跳过层 -->
@@ -160,6 +175,12 @@
                                                     d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                                                 <path v-else
                                                     d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                                            </svg>
+                                        </button>
+                                        <!-- 复制按钮放编辑按钮之后，margin-left 留一丢丢间隙 -->
+                                        <button v-if="field.key === 'loraWorks'" class="edit-btn copy-field-btn" @click="copyImagePrompt(isEditing[field.key] ? editValues[field.key] : loraInfo.loraWorks)" title="复制">
+                                            <svg class="svg-icon" viewBox="0 0 24 24" width="16" height="16">
+                                                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                                             </svg>
                                         </button>
                                     </td>
@@ -225,9 +246,6 @@
                                                 :class="{ 'is-selected': isWordSelected(word.word), 'is-hidden': isCollapsed && index >= 10 }"
                                                 @click="toggleWordSelection(word.word)">
                                                 <span class="word-text">{{ word.word }}</span>
-                                                <svg v-if="word.civitai" viewBox="0 0 24 24" width="12" height="12" class="civitai-icon">
-                                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H8l4-7v4h3l-4 7z" />
-                                                </svg>
                                                 <small v-if="word.count != null" class="word-count">{{ word.count }}</small>
                                             </span>
                                         </div>
@@ -245,7 +263,7 @@
 
                     <!-- 图片 -->
                     <ul class="lora-detail__images" v-if="loraInfo.images?.length">
-                        <li v-for="(img, index) in loraInfo.images" :key="img.url || index" class="lora-detail__image-item">
+                        <li v-for="(img, index) in loraInfo.images" :key="coverDisplayUrl(img) || index" class="lora-detail__image-item">
                             <figure>
                                 <div class="image-wrapper" @click="openPreview(img.url, img)" style="cursor: zoom-in;">
                                     <div class="image-action" @click.stop="saveLoraImg(img.url)">
@@ -253,7 +271,7 @@
                                     </div>
                                     <!-- 视频元素 -->
                                     <video
-                                        :src="img.url"
+                                        :src="coverDisplayUrl(img)"
                                         v-show="img.type === 'video' || isVideoUrl(img.url)"
                                         autoplay muted loop playsinline
                                         @click.stop="openPreview(img.url, img)"
@@ -261,7 +279,7 @@
                                     />
                                     <!-- 图片元素 -->
                                     <img
-                                        :src="img.url"
+                                        :src="coverDisplayUrl(img)"
                                         loading="lazy"
                                         v-show="!(img.type === 'video' || isVideoUrl(img.url))"
                                         draggable="false"
@@ -309,11 +327,21 @@
                                     <span v-if="img.positive" class="info-item">
                                         <label>正向提示词 positive</label>
                                         {{ img.positive }}
+                                        <button class="prompt-copy-btn" @click.stop="copyImagePrompt(img.positive)" title="复制">
+                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                                                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                                            </svg>
+                                        </button>
                                     </span>
 
                                     <span v-if="img.negative" class="info-item">
                                         <label>反向提示词 negative</label>
                                         {{ img.negative }}
+                                        <button class="prompt-copy-btn" @click.stop="copyImagePrompt(img.negative)" title="复制">
+                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                                                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                                            </svg>
+                                        </button>
                                     </span>
                                 </figcaption>
                             </figure>
@@ -443,8 +471,14 @@ onUnmounted(() => {
 })
 
 // 关闭窗口
+// 关闭窗口
 const closeWindow = (windowName) => {
     isOpen.value = false
+    // 广播关闭通知：wlr 悬浮栏靠"详情窗存在"钉住自己（见 prompt_index 的 controlsPinned），
+    // 详情窗在主页面 document，同 window 的 postMessage 即可让提示词编辑器解除钉住
+    try {
+        window.parent.postMessage({ type: 'weilin_prompt_ui_lora_detail_closed' }, '*')
+    } catch (e) { /* 通知失败不影响关闭 */ }
     if (onDetailClose.value) {
         onDetailClose.value();
         onDetailClose.value = null;
@@ -482,7 +516,7 @@ defineExpose({
 })
 
 const fileURL = ref('')
-const emit = defineEmits(['close', 'update'])
+const emit = defineEmits(['close', 'update', 'cover-updated'])
 
 
 const loraRawRef = ref()
@@ -562,6 +596,7 @@ const removeField = async (key) => {
 
 // 初始化
 const init = () => {
+    coverNonce.value = Date.now()
     fileURL.value = loraInfo.value.name;
     loraInfo.value = {};
     selectedWords.value = [];
@@ -668,20 +703,33 @@ const extractFileNameFromUrl = (url) => {
 // 上传Lora图片
 const saveLoraImg = async (url) => {
     try {
-        const data = await fetch(url);
-        const fileName = extractFileNameFromUrl(url);
-        const blob = await data.blob();
-        loraApi
-            .postUplaodImg(blob, loraInfo.value.file, fileName)
-            .then((res) => {
-                // console.log(res.data.data)
-                message({ type: "success", str: 'message.saveSuccess' });
-            })
-            .catch((err) => {
-                message({ type: "warn", str: 'message.unknownError' });
-            });
+        if (!loraFile.value) {
+            loraFile.value = loraInfo.value.file || ''
+        }
+        if (!url || !loraFile.value) {
+            message({ type: "warn", str: 'message.unknownError' })
+            return
+        }
+        if (url.startsWith('data:')) {
+            // base64 图片：前端转 blob 后走原有上传接口（与 setAsCover 一致）
+            const blob = await (await fetch(url)).blob()
+            await loraApi.postUplaodImg(blob, loraFile.value, extractFileNameFromUrl(url))
+        } else {
+            // http(s) 图片 / 本地封面 URL：交给后端代下，绕过浏览器 CORS
+            // （本地封面 URL 由后端直接 no-op，仅更新指向；避免解析出空扩展名写出无后缀文件）
+            await loraApi.postSetCoverByUrl(loraFile.value, url)
+        }
+        message({ type: "success", str: 'message.saveSuccess' })
+        // 通知父组件（管理器列表）原地更新该 lora 的封面缩略图
+        const file1 = loraFile.value
+        emit('cover-updated', file1)
+        // 双保险：详情窗/卡片可能在 await 期间被关闭卸载导致 emit 丢失 → 广播兜底
+        window.postMessage({ type: 'weilin_prompt_ui_lora_cover_updated', file: file1 }, '*')
+        // 刷新详情（bump coverNonce → 本地封面即时重拉）
+        refreshLoraInfo()
     } catch (error) {
-        message({ type: "warn", str: 'message.unknownError' });
+        console.error('saveLoraImg error:', error)
+        message({ type: "warn", str: 'message.unknownError' })
     }
 
 
@@ -742,6 +790,7 @@ const trainedWords = computed(() => {
 
 // 方法
 const refreshLoraInfo = async () => {
+    coverNonce.value = Date.now()
     const scrollPosition = loraContent.value?.scrollTop || 0
     loading.value = true;
     loraApi
@@ -1026,6 +1075,19 @@ const copySelectedWords = async () => {
     )
 }
 
+// 复制图片信息里的 prompt 行（正向/反向提示词）
+const copyImagePrompt = (text) => {
+    if (!text) return
+    navigator.clipboard.writeText(text).then(
+        () => {
+            message({ type: "success", str: 'message.copySuccess' });
+        },
+        () => {
+            message({ type: "warn", str: 'message.copyFailed' });
+        }
+    )
+}
+
 // 窗口状态管理
 const isMaximized = ref(false)
 const isMinimized = ref(false)
@@ -1263,7 +1325,7 @@ const setAsCover = async () => {
         let blob, fileName
         const url = previewUrl.value
 
-        // 处理 base64 图片
+        // 处理 base64 图片：前端转 blob 后走原有上传接口
         if (url.startsWith('data:')) {
             const arr = url.split(',')
             const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg'
@@ -1275,17 +1337,18 @@ const setAsCover = async () => {
             }
             blob = new Blob([u8arr], { type: mime })
             fileName = extractFileNameFromUrl(url)
+            await loraApi.postUplaodImg(blob, loraFile.value, fileName)
         } else {
-            const data = await fetch(url)
-            if (!data.ok) {
-                throw new Error('fetch failed: ' + data.status)
-            }
-            blob = await data.blob()
-            fileName = extractFileNameFromUrl(url)
+            // http(s) 图片（本地封面 / 远程图）：后端代下，绕过浏览器 CORS
+            await loraApi.postSetCoverByUrl(loraFile.value, url)
         }
 
-        await loraApi.postUplaodImg(blob, loraFile.value, fileName)
         message({ type: "success", str: 'message.saveSuccess' })
+        // 通知父组件（管理器列表）原地更新该 lora 的封面缩略图
+        const file2 = loraFile.value
+        emit('cover-updated', file2)
+        // 双保险：详情窗/卡片可能在 await 期间被关闭卸载导致 emit 丢失 → 广播兜底
+        window.postMessage({ type: 'weilin_prompt_ui_lora_cover_updated', file: file2 }, '*')
         // 刷新详情
         refreshLoraInfo()
     } catch (error) {
@@ -1308,6 +1371,23 @@ const isVideoUrl = (url) => {
            urlLower.includes('fmt=mp4') ||
            urlLower.endsWith('.webm') ||
            urlLower.endsWith('.mov')
+}
+
+// 本地封面 URL 判定（与 lora_card 浮窗保持同一套换封面刷新方案）
+const isLocalCover = (url) => {
+    if (!url) return false
+    return url.includes('lorainfo/api/loras/img')
+}
+
+// 换封面后强制刷新本地封面图：对本地封面 URL 追加前端缓存戳（不依赖后端重启）。
+// 详情窗与浮窗同源——设置封面成功后会调用 refreshLoraInfo/重新加载，
+// 届时把 coverNonce 置为新时间戳，本地封面 URL 串变化即触发浏览器重拉 + Vue 重绑。
+const coverNonce = ref(Date.now())
+const coverDisplayUrl = (img) => {
+    const url = (img && img.url) || ''
+    if (!url || !isLocalCover(url)) return url
+    const sep = url.includes('?') ? '&' : '?'
+    return `${url}${sep}_cb=${coverNonce.value}`
 }
 
 </script>
@@ -1477,6 +1557,11 @@ const isVideoUrl = (url) => {
     background: var(--weilin-prompt-ui-button-hover);
 }
 
+/* 提示词行：复制按钮排在编辑按钮之后，留一点间隙避免贴死 */
+.copy-field-btn {
+    margin-left: 5px;
+}
+
 /* 输入框样式 */
 input {
     width: 100%;
@@ -1538,7 +1623,7 @@ input:focus {
 .trained-words-header {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     margin-bottom: 14px;
     flex-wrap: wrap;
     gap: 12px;
@@ -1621,11 +1706,6 @@ input:focus {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
-.word-tag.is-selected .civitai-icon {
-    fill: #fff;
-    opacity: 0.95;
-}
-
 .word-tag.is-hidden {
     display: none;
 }
@@ -1638,14 +1718,6 @@ input:focus {
     max-width: 200px;
     display: inline-flex;
     align-items: center;
-}
-
-.word-tag .civitai-icon {
-    fill: var(--weilin-prompt-ui-primary-color);
-    opacity: 0.9;
-    flex-shrink: 0;
-    width: 12px;
-    height: 12px;
 }
 
 .word-tag .word-count {
@@ -1850,6 +1922,25 @@ input:focus {
     padding: 8px;
     border-radius: 4px;
     margin-top: 12px;
+}
+
+/* prompt 行的复制按钮 */
+.info-item .prompt-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 2px;
+    margin-left: 4px;
+    border: none;
+    background: none;
+    color: var(--weilin-prompt-ui-label);
+    cursor: pointer;
+    opacity: 0.6;
+    vertical-align: middle;
+}
+
+.info-item .prompt-copy-btn:hover {
+    opacity: 1;
+    color: var(--weilin-prompt-ui-primary-color);
 }
 
 /* 图片参数信息网格布局 */

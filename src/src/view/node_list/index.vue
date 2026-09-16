@@ -62,7 +62,8 @@ onMounted(() => {
     top: 0;
     left: 0;
     height: 100%;
-    background: var(--weilin-prompt-ui-primary-bg);
+    /* 窗口底色由 DraggableWindow 根统一画一层（rgba 调色板下多层叠加会变实心） */
+    background: transparent;
     transition: width 0.3s ease;
     width: 100%;
     overflow: hidden;

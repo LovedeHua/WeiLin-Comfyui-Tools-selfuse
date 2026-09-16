@@ -71,14 +71,15 @@
                                         @wheel="onWeightWheel($event, lora, 'text_encoder_weight')" class="lora-weight"
                                         step="0.1" />
                                 </div>
-                                <!-- 权重同步：卡片级开关，开启后修改任一权重，另一个自动同步为相同值 -->
-                                <div class="switch-item-col">
-                                    <label>{{ t('loraManager.syncWeights') }}</label>
-                                    <label class="switch">
-                                        <input type="checkbox" v-model="lora.sync_weights" />
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+                <!-- 权重同步：卡片级开关，开启后修改任一权重，另一个自动同步为相同值；
+                     与 wlr 悬浮栏的同步开关双向同步状态 -->
+                <div class="switch-item-col">
+                  <label>{{ t('loraManager.syncWeights') }}</label>
+                  <label class="switch">
+                    <input type="checkbox" v-model="lora.sync_weights" @change="onSyncWeightsToggle(lora)" />
+                    <span class="slider"></span>
+                  </label>
+                </div>
                                 <!-- Switch 开关 -->
                                 <div class="switch-item-col">
                                     <label>{{ lora.hidden ? t('lora.hideLora') : t('lora.showLora') }}</label>
@@ -172,6 +173,30 @@ const onWeightInput = (lora, field) => {
     const other = field === 'weight' ? 'text_encoder_weight' : 'weight'
     lora[other] = lora[field]
 }
+
+// ============ 权重同步开关：与 wlr 悬浮栏双向同步 ============
+// lora名归一化（去路径/后缀）——wlr 标签名、卡片 lora/name 三者命名口径可能不同
+const syncKeyOf = (s) => String(s || '').replace(/\\/g, '/').split('/').pop().replace(/\.(safetensors|pt|sft|ckpt|lora)$/i, '')
+
+// 用户在堆窗口切换卡片开关 → 广播给 wlr 悬浮栏（同 lora 的悬浮栏开关跟随）
+const onSyncWeightsToggle = (lora) => {
+    window.postMessage({
+        type: 'weilin_prompt_ui_lora_stack_sync_changed',
+        lora: lora.lora,
+        name: lora.name,
+        value: !!lora.sync_weights
+    }, '*')
+}
+
+// wlr 悬浮栏切换同步开关 → 同名卡片跟随（程序化赋值不触发 @change，不会回环广播）
+window.addEventListener('message', (event) => {
+    if (!isTrustedMessage(event)) return
+    if (event.data?.type !== 'weilin_prompt_ui_lora_stack_set_sync') return
+    const key = syncKeyOf(event.data.lora)
+    if (!key) return
+    const card = selectedLoras.value.find(l => syncKeyOf(l.lora) === key || syncKeyOf(l.name) === key)
+    if (card) card.sync_weights = !!event.data.value
+})
 
 // 悬停滚轮调权：无需点击聚焦，鼠标悬停在权重输入框上滚动即可调整（步长 0.1，与 step 属性一致）
 const onWeightWheel = (e, lora, field) => {
@@ -402,7 +427,8 @@ defineExpose({
 .weilin_prompt_ui_lora-stack {
     height: 100%;
     width: 100%;
-    background: var(--weilin-prompt-ui-primary-bg);
+    /* 窗口底色由 DraggableWindow 根统一画一层（rgba 调色板下多层叠加会变实心） */
+    background: transparent;
     transition: width 0.3s ease;
     overflow: hidden;
     box-sizing: border-box;

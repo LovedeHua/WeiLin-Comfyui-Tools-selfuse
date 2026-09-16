@@ -1,5 +1,5 @@
 <template>
-    <div class="lora_catd_content" :style="'left: ' + paddingLeft + 'px;top: '+paddingTop+'px;'" @mouseenter="handleCardEnter"
+    <div class="lora_catd_content" :class="{ 'preview-open': previewVisible }" :style="'left: ' + paddingLeft + 'px;top: '+paddingTop+'px;'" @mouseenter="handleCardEnter"
         @mouseleave="handleCardLeave" style="font-size: 0.55em;">
         <!-- 添加关闭按钮 -->
         <div class="close-button" @click="handleCardLeave" title="关闭">
@@ -207,9 +207,6 @@
                                             :class="{ 'is-selected': isWordSelected(word.word), 'is-hidden': isCollapsed && index >= 10 }"
                                             @click="toggleWordSelection(word.word)">
                                             <span class="word-text">{{ word.word }}</span>
-                                            <svg v-if="word.civitai" viewBox="0 0 24 24" width="12" height="12" class="civitai-icon">
-                                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H8l4-7v4h3l-4 7z" />
-                                            </svg>
                                             <small v-if="word.count != null" class="word-count">{{ word.count }}</small>
                                         </span>
                                     </div>
@@ -228,7 +225,7 @@
 
                 <!-- 图片 -->
                 <ul class="lora-detail__images" v-if="loraInfo.images?.length" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; list-style: none; padding: 0; margin: 0;">
-                    <li v-for="(img, index) in loraInfo.images" :key="img.url || index" class="lora-detail__image-item">
+                    <li v-for="(img, index) in loraInfo.images" :key="coverDisplayUrl(img) || index" class="lora-detail__image-item">
                         <div class="image-wrapper" style="height: 200px; cursor: zoom-in; position: relative;" @click="openPreview(img.url, img)">
                             <!-- 本地封面标志 -->
                             <div v-if="isLocalCover(img.url)" class="local-cover-badge" title="本地封面">
@@ -239,7 +236,7 @@
                             </div>
                             <!-- 视频元素 -->
                             <video
-                                :src="img.url"
+                                :src="coverDisplayUrl(img)"
                                 v-show="img.type === 'video' || isVideoUrl(img.url)"
                                 autoplay muted loop playsinline
                                 @mouseenter="handleCardEnter"
@@ -249,7 +246,7 @@
                             />
                             <!-- 图片元素 -->
                             <img
-                                :src="img.url"
+                                :src="coverDisplayUrl(img)"
                                 loading="lazy"
                                 v-show="!(img.type === 'video' || isVideoUrl(img.url))"
                                 @mouseenter="handleCardEnter"
@@ -297,7 +294,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import message from '@/utils/message'
 import { loraApi } from '@/api/lora'
@@ -330,7 +327,7 @@ const props = defineProps({
 const fileURL = ref('')
 const loraFile = ref('')
 const currentRequestFile = ref('')
-const emit = defineEmits(['cardLeave', 'cardenter', 'openDetail'])
+const emit = defineEmits(['cardLeave', 'cardenter', 'openDetail', 'cover-updated'])
 
 // 本地文件选择
 const fileInput = ref(null)
@@ -357,6 +354,8 @@ const handleLocalFileChange = async (event) => {
         loading.value = true
         await loraApi.postUplaodImg(file, loraFile.value, fileName)
         message({ type: "success", str: 'message.saveSuccess' })
+        // 通知父组件（管理器列表）原地更新该 lora 的封面缩略图
+        emit('cover-updated', loraFile.value)
         // 刷新详情以显示新的封面
         refresh()
     } catch (error) {
@@ -376,23 +375,45 @@ const openDetail = () => {
     handleCardLeave()
 }
 
+// 卡内是否存在"真实选区"（非塌缩——单纯点击产生的空选区不算）且落在卡片内
+const hasCardSelection = () => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false
+    const range = selection.getRangeAt(0)
+    const cardEl = loraContent.value
+    return !!(cardEl && (cardEl.contains(range.startContainer) || cardEl.contains(range.endContainer)))
+}
+
+// 选区保护标记：mouseleave 时因卡内有选中文字而暂缓关闭 → 置 true；
+// 选区消失后保护自动取消（onSelectionChange 补发关闭）
+let selectionProtected = false
+
 const handleCardLeave = () => {
     isMouseInCard.value = false
     // 如果预览放大弹窗打开，不关闭悬浮窗口
     if (previewVisible.value) return
-    // 如果选区在卡片内部，不关闭悬浮窗口
-    const selection = window.getSelection()
-    if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0)
-        const cardEl = loraContent.value
-        if (cardEl && (cardEl.contains(range.startContainer) || cardEl.contains(range.endContainer))) {
-            return
-        }
+    // 选区在卡片内（选中的是卡内文字）→ 暂缓关闭，进入"选区保护"状态；
+    // 保护在选区消失时自动取消（见 onSelectionChange）——否则选区一直存在，
+    // 之后再也没有 mouseleave 会触发，卡片永久滞留
+    if (hasCardSelection()) {
+        selectionProtected = true
+        return
     }
+    emit('cardLeave')
+}
+
+// 选区消失 → 选区保护自动取消：若指针已不在卡内，补发关闭。
+// 仅在保护生效过（selectionProtected）时才动作——避免 selectionchange 误伤
+// "指针从未进卡"的正常场景（如封面悬停时在别处点击导致选区变化）
+const onSelectionChange = () => {
+    if (!selectionProtected || previewVisible.value || isMouseInCard.value) return
+    if (hasCardSelection()) return
+    selectionProtected = false
     emit('cardLeave')
 }
 const handleCardEnter = () => {
     isMouseInCard.value = true
+    selectionProtected = false
     emit('cardenter')
 }
 
@@ -477,10 +498,17 @@ const isMouseInCard = ref(false)
 
 onMounted(() => {
     init()
+    document.addEventListener('selectionchange', onSelectionChange)
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('selectionchange', onSelectionChange)
 })
 
 // 初始化
 const init = () => {
+    // 每次打开/刷新都刷新缓存戳，强制本地封面图重新拉取（换封面后无需关闭重开）
+    coverNonce.value = Date.now()
     const targetFile = props.fileNmae;
     fileURL.value = targetFile;
     currentRequestFile.value = targetFile;
@@ -1089,11 +1117,14 @@ const setAsCover = async () => {
         message({ type: "warn", str: 'message.unknownError' });
         return;
     }
+    // 固化本次目标：await 期间用户可能已关闭预览（关闭后卡片会补发 cardLeave → 被 v-if
+    // 卸载），届时 loraFile 可能已被清空/切换，通知到错误的 lora 或空值
+    const file = loraFile.value
     try {
         let blob, fileName
         const url = previewUrl.value
 
-        // 处理 base64 图片
+        // 处理 base64 图片：前端转 blob 后走原有上传接口
         if (url.startsWith('data:')) {
             const arr = url.split(',')
             const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg'
@@ -1105,17 +1136,18 @@ const setAsCover = async () => {
             }
             blob = new Blob([u8arr], { type: mime })
             fileName = extractFileNameFromUrl(url)
+            await loraApi.postUplaodImg(blob, file, fileName)
         } else {
-            const data = await fetch(url)
-            if (!data.ok) {
-                throw new Error('fetch failed: ' + data.status)
-            }
-            blob = await data.blob()
-            fileName = extractFileNameFromUrl(url)
+            // http(s) 图片（本地封面 / 远程图）：后端代下，绕过浏览器 CORS
+            await loraApi.postSetCoverByUrl(file, url)
         }
 
-        await loraApi.postUplaodImg(blob, loraFile.value, fileName)
         message({ type: "success", str: 'message.saveSuccess' })
+        // 通知父组件（管理器列表）原地更新该 lora 的封面缩略图
+        emit('cover-updated', file)
+        // 双保险：若卡片在 await 期间已被卸载（关闭预览后补发 cardLeave → v-if 卸载），
+        // emit 会丢失导致列表缩略图永远不更新，故再广播一条 window 消息由管理器兜底
+        window.postMessage({ type: 'weilin_prompt_ui_lora_cover_updated', file }, '*')
         // 刷新详情以显示新的封面
         refresh()
     } catch (error) {
@@ -1167,6 +1199,15 @@ const handleVideoError = (e) => {
 const isLocalCover = (url) => {
     if (!url) return false
     return url.includes('lorainfo/api/loras/img')
+}
+
+// 换封面后强制刷新本地封面图：对本地封面 URL 追加前端缓存戳（不依赖后端重启）
+const coverNonce = ref(Date.now())
+const coverDisplayUrl = (img) => {
+    const url = (img && img.url) || ''
+    if (!url || !isLocalCover(url)) return url
+    const sep = url.includes('?') ? '&' : '?'
+    return `${url}${sep}_cb=${coverNonce.value}`
 }
 
 defineExpose({
@@ -1447,11 +1488,6 @@ input:focus {
     line-height: 1.2;
 }
 
-.word-tag .civitai-icon {
-    fill: currentColor;
-    opacity: 0.8;
-}
-
 .civitai-link {
     display: inline-flex;
     align-items: center;
@@ -1559,6 +1595,13 @@ input:focus {
     overflow: hidden;
 }
 
+/* 预览打开时提升根节点层级：根节点 z-index:500 自成 stacking context，
+   内部 .preview-overlay 的 12000 只在该上下文内生效，跳不出层级竞争，
+   必须把根节点本身提到工具栏 .action-item(9999) 之上 */
+.lora_catd_content.preview-open {
+    z-index: 12001;
+}
+
 /* 放大预览弹窗样式 */
 .preview-overlay {
     position: fixed;
@@ -1570,7 +1613,9 @@ input:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    /* 12000：须高于 prompt_index 顶部工具栏 .action-item 的 9999（同 iframe 文档内比较），
+       否则预览打开时工具栏按钮浮在遮罩之上；详情窗是独立窗口无此竞争 */
+    z-index: 12000;
     cursor: zoom-out;
     pointer-events: auto;
 }

@@ -1,5 +1,10 @@
 <template>
-  <div :class="`${prefix}lora-manager`">
+  <!-- 74.86 重构：高度全部交给 CSS flex 分配（is-expand=还有数据未加载时撑满剩余空间；
+       is-embedded 默认=全部加载完后收缩到内容高度）。不再有任何 JS 像素测量。 -->
+  <div :class="[`${prefix}lora-manager`, {
+    'is-embedded': loraManager === 'prompt_inner',
+    'is-expand': loraManager === 'prompt_inner' && !hasLoadedAll,
+  }]">
     <div class="lora-manager-top-bar">
       <!-- 添加搜索框 -->
       <input v-model="searchQuery" :class="`${prefix}search-input`" :placeholder="t('loraManager.searchPlaceholder')"
@@ -28,9 +33,16 @@
           <input type="checkbox" v-model="showHoverInfo" :class="`${prefix}checkbox`" />
           <span>悬浮信息</span>
         </label>
-        <label :class="`${prefix}checkbox-label`" v-if="loraManager == 'prompt_inner'">
+        <label :class="`${prefix}checkbox-label`" v-if="loraManager == 'prompt_inner'"
+          title="勾选：点击卡片直接把该 Lora 的标签写入提示词；不勾选：点击卡片改为打开详情窗口">
           <input type="checkbox" v-model="clickAddTag" :class="`${prefix}checkbox`" />
-          <span>点击添加Tag</span>
+          <span>添加Lora标签</span>
+        </label>
+        <!-- 「添加触发词」对所有模式生效（含 addLora 走 selectLora 的路径），故不限制 prompt_inner -->
+        <label :class="`${prefix}checkbox-label`"
+          title="写入提示词时是否同时附带该 Lora 的触发词（loraWorks）；不勾选则只写入 Lora 标签本身">
+          <input type="checkbox" v-model="addTriggerWords" :class="`${prefix}checkbox`" />
+          <span>添加触发词</span>
         </label>
       </div>
     </div>
@@ -53,7 +65,8 @@
     </div>
 
     <!-- 使用虚拟滚动列表 -->
-    <div :class="`${prefix}lora-list-container`" ref="scrollContainer" @scroll="handleScroll">
+    <div :class="`${prefix}lora-list-container`" ref="scrollContainer" @scroll="handleScroll" @wheel="handleListWheel"
+      title="按住 Ctrl + 滚轮 可调整卡片大小">
       <div v-if="isLoading && !isLoadingMore" class="loading-indicator">
         {{ t('loraManager.loading') }}
       </div>
@@ -62,19 +75,19 @@
       </div>
 
       <div :class="`${prefix}lora-list`"
-        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px;">
+        :style="{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize}px, 1fr))`, gap: '14px' }">
         <div v-for="lora in paginatedLoraList" :key="lora.file_path" :class="`${prefix}lora-card`" ref="loraCardRef"
           @click="openLoraDetail(lora)" @mouseover="(e) => handleMouseHover(lora.name, e)"
           @mouseleave="handleMouseLeave"
-          style="display: flex; flex-direction: column; min-height: 180px; cursor: pointer;">
+          :style="{ display: 'flex', flexDirection: 'column', minHeight: cardMinH + 'px', cursor: 'pointer' }">
           <div :class="`${prefix}lora-preview`"
             style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden;width: 100%;">
             <video v-if="lora.preview && isVideoPreview(lora.preview)" :src="lora.preview" autoplay muted loop playsinline
-              style="width: 100%; height: 100%; object-fit: contain; min-height: 180px;" />
+              :style="{ width: '100%', height: '100%', objectFit: 'contain', minHeight: cardMinH + 'px' }" />
             <img v-else-if="lora.preview" :src="lora.preview" :alt="lora.model_name" :title="lora.model_name" loading="lazy"
-              style="width: 100%; height: 100%; object-fit: contain; min-height: 180px;" />
+              :style="{ width: '100%', height: '100%', objectFit: 'contain', minHeight: cardMinH + 'px' }" />
             <div v-else :class="`${prefix}no-preview`"
-              style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; min-height: 180px;">
+              :style="{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: cardMinH + 'px' }">
               <svg viewBox="0 0 24 24" width="24" height="24">
                 <path
                   d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
@@ -110,9 +123,9 @@
 
     </div>
 
-    <loraDetail ref="loraDetailRef" />
+    <loraDetail ref="loraDetailRef" @cover-updated="onCoverUpdated" />
     <LoraCard ref="loraCardItem" v-if="showCard" :fileNmae="hoveFileName" :paddingLeft="paddingLeftValue"
-      :paddingTop="paddingTopValue" @cardLeave="handleEnterLeave" @cardenter="handEnterCard" @openDetail="handleOpenDetail" />
+      :paddingTop="paddingTopValue" @cardLeave="handleEnterLeave" @cardenter="handEnterCard" @openDetail="handleOpenDetail" @cover-updated="onCoverUpdated" />
 
   </div>
 </template>
@@ -146,15 +159,14 @@ const isHovering = ref(false);
 const loraCardItem = ref()
 
 const showHoverInfo = ref(localStorage.getItem('weilin_prompt_ui_showHoverInfo'));
-const clickAddTag = ref(localStorage.getItem('weilin_prompt_ui_clickAddTag'));
+// 注意：localStorage 只能存字符串，'false' 是非空字符串 → 布尔真值！
+// 必须显式 === 'true' 转成布尔，否则未勾选时 clickAddTag 拿到字符串 'false' 仍为真值，
+// 点击卡片会一直走「直接添加Tag」分支（现象：勾不勾选都会自动添加预设提示词）。
+const clickAddTag = ref(localStorage.getItem('weilin_prompt_ui_clickAddTag') === 'true');
 
 if (showHoverInfo.value === null || showHoverInfo.value === undefined || showHoverInfo.value === '') {
   localStorage.setItem('weilin_prompt_ui_showHoverInfo', true);
   showHoverInfo.value = true;
-}
-if (clickAddTag.value === null || clickAddTag.value === undefined || clickAddTag.value === '') {
-  localStorage.setItem('weilin_prompt_ui_clickAddTag', false);
-  clickAddTag.value = false;
 }
 
 const props = defineProps({
@@ -172,6 +184,16 @@ watch(showHoverInfo, (newVal) => {
 
 watch(clickAddTag, (newVal) => {
   localStorage.setItem('weilin_prompt_ui_clickAddTag', newVal);
+});
+
+// 「添加触发词」：开启「添加Lora标签」时，是否把该 lora 的触发词（loraWorks）一并追加到提示词。
+// 默认开启（沿用历史行为：原先总是插入 tag + ", " + loraWorks）。
+// localStorage 只存字符串，必须显式 === 'true' 转布尔；key 不存在(null)时才取默认 true。
+const _atwRaw = localStorage.getItem('weilin_prompt_ui_addTriggerWords');
+const addTriggerWords = ref(_atwRaw === null ? true : _atwRaw === 'true');
+
+watch(addTriggerWords, (newVal) => {
+  localStorage.setItem('weilin_prompt_ui_addTriggerWords', newVal);
 });
 
 
@@ -289,6 +311,44 @@ const handleOpenDetail = (loraData) => {
   loraDetailRef.value.open(loraData)
 }
 
+// 换封面成功后，原地更新管理器列表中对应 lora 的封面缩略图（不整页重拉，避免滚动复位）
+const applyCoverUpdated = async (file) => {
+  if (!file) return
+  const norm = (s) => (s || '').replace(/\\/g, '/')
+  const item = paginatedLoraList.value.find(it =>
+    norm(it.basename) === norm(file) ||
+    norm(it.file_path) === norm(file) ||
+    norm(it.file_path).endsWith('/' + norm(file))
+  )
+  if (!item) return
+  try {
+    const res = await loraApi.getLoraDetail({ file, light: true })
+    const imgs = (res.data && res.data.images) || []
+    const cover = imgs.find(im => (im.url || '').includes('lorainfo/api/loras/img')) || imgs[0]
+    if (cover && cover.url) {
+      const sep = cover.url.includes('?') ? '&' : '?'
+      // 追加前端 anti-cache 戳：后端未重启时也能强制刷新缩略图
+      item.preview = cover.url + sep + '_cb=' + Date.now()
+    }
+  } catch (e) {
+    console.error('更新列表封面缩略图失败:', e)
+  }
+}
+
+// emit 通道（子组件仍存活时）：只更新列表缩略图。给提示词窗口的广播由子组件自己发
+// （子组件在 await 期间被卸载时 emit 会丢，但广播已经先于 emit 发出），这里不再重复
+// 广播——否则自己又会收到自己发的消息，导致列表重复刷新一次
+const onCoverUpdated = (file) => applyCoverUpdated(file)
+
+// 广播兜底：悬浮卡片/详情窗在"设为封面"的 await 期间可能被卸载（预览关闭后卡片补发
+// cardLeave → v-if 卸载），此时 emit 会丢失、列表缩略图永远不更新；这里直接收 window
+// 广播补上。**不再转发广播**，否则与 onCoverUpdated 形成无限回环。
+const handleCoverUpdatedMessage = (event) => {
+  const d = event?.data
+  if (!d || d.type !== 'weilin_prompt_ui_lora_cover_updated') return
+  applyCoverUpdated(d.file)
+}
+
 const folderList = ref([])
 const selectFolder = ref([])
 const seed = ref('')
@@ -317,6 +377,60 @@ const handleScroll = () => {
   // 当滚动到距离底部100px时触发加载更多
   if (container.scrollHeight - container.scrollTop - container.clientHeight < 100) {
     loadMoreData()
+  }
+}
+
+// ===== 自定义卡片大小（Ctrl+滚轮调整，与 Windows 资源管理器调图标大小同款交互）=====
+const CARD_SIZE_MIN = 90
+const CARD_SIZE_MAX = 300
+const CARD_SIZE_KEY = 'weilin_prompt_ui_lora_card_size'
+const _csRaw = parseInt(localStorage.getItem(CARD_SIZE_KEY), 10)
+const cardSize = ref(Number.isFinite(_csRaw) ? Math.min(CARD_SIZE_MAX, Math.max(CARD_SIZE_MIN, _csRaw)) : 130)
+// 卡片总高与列宽等比（130 宽 → 180 高），名称区固定 36px 不随缩放
+const cardMinH = computed(() => Math.round(cardSize.value * 180 / 130))
+watch(cardSize, (v) => {
+  localStorage.setItem(CARD_SIZE_KEY, String(v))
+  // 调大后内容可能已不足一屏 → 补加载；调小则可能需要回收滚动位置（无需处理）
+  nextTick(ensureFilled)
+})
+
+// 列表区 Ctrl+滚轮 调整卡片大小；不带 Ctrl 的滚轮保持默认滚动
+const handleListWheel = (e) => {
+  if (!e.ctrlKey) return
+  e.preventDefault()
+  const step = e.deltaY < 0 ? 10 : -10
+  cardSize.value = Math.min(CARD_SIZE_MAX, Math.max(CARD_SIZE_MIN, cardSize.value + step))
+}
+
+// ===== 内容不足一屏时自动补加载 =====
+// 底部大片空白的根因：handleScroll 只在 scroll 事件里触发，而内容不满一屏
+// （scrollHeight === clientHeight）时永远不会有 scroll 事件，导致不继续加载。
+// 这里改为主动检查：每次加载完 / 窗口 resize / 卡片变大后，若距底部不足 100px 且
+// 还有数据，就继续加载，直到填满容器或全部加载完。
+let filling = false
+const ensureFilled = async () => {
+  if (filling) return
+  filling = true
+  try {
+    let guard = 0
+    while (!hasLoadedAll.value && !isLoadingMore.value && guard++ < 40) {
+      const c = scrollContainer.value
+      // 容器不可见（v-show 收起 / 未挂载）时 clientHeight=0：
+      // 此时 scrollHeight-scrollTop-clientHeight 恒为 0，会被误判成"没填满"而一路加载全部数据
+      if (!c || !c.clientHeight) break
+      if (c.scrollHeight - c.scrollTop - c.clientHeight < 100) {
+        try {
+          await loadMoreData()
+        } catch (e) {
+          // loadMoreData 搜索分支存在既有的 res 未定义问题，别让补加载抛 unhandled rejection
+          console.warn('[WeiLin] 补加载失败:', e)
+          break
+        }
+        await nextTick()
+      } else break
+    }
+  } finally {
+    filling = false
   }
 }
 
@@ -350,7 +464,7 @@ const openLoraDetail = (loraData) => {
   if (props.loraManager === 'addLora') {
     selectLora(loraData)
   } else if (props.loraManager === 'prompt_inner' && clickAddTag.value) {
-    // 如果启用了点击添加Tag，则直接添加Tag而不打开详情
+    // 如果启用了「添加Lora标签」，则直接把 wlr 标签写入提示词而不打开详情窗口
     addLoraTag(loraData);
   } else {
     loraDetailRef.value.open(loraData)
@@ -444,6 +558,8 @@ const getRangeLoraList = async (arr) => {
   } else {
     paginatedLoraList.value = paginatedLoraList.value.concat(res.data.loras)
   }
+  // 渲染后检查内容是否填满容器，不足则继续补加载（窗口大时底部空白）
+  nextTick(ensureFilled)
 }
 
 const getAllLoraList = async () => {
@@ -521,14 +637,16 @@ const loadMoreData = async () => {
     currentPage.value++
     // 加载更多数据
     if (isSearch.value) {
-      selectFolder.value = res.data
+      // selectFolder 已在 searchLoraList 里存好搜索结果；原先这里写
+      // `selectFolder.value = res.data` 引用了不存在的 res，一进搜索分页就抛
+      // ReferenceError，导致搜索模式下 hasLoadedAll 永远无法置真。
       if (selectFolder.value.length > 0) {
         const valuesArray = Object.values(selectFolder.value)
         // 根据当前页码获取对应的50条数据
         const startIndex = (currentPage.value - 1) * 50
         const endIndex = startIndex + 50
         const pageData = valuesArray.slice(startIndex, endIndex)
-        getRangeLoraList(pageData)
+        await getRangeLoraList(pageData)
       }
     } else {
       if (currentCategory.value === "all") {
@@ -540,7 +658,7 @@ const loadMoreData = async () => {
           const startIndex = (currentPage.value - 1) * 50
           const endIndex = startIndex + 50
           const pageData = valuesArray.slice(startIndex, endIndex)
-          getRangeLoraList(pageData)
+          await getRangeLoraList(pageData)
         }
       } else {
         const rootFolder = selectFolder.value[currentSubCategory.value]
@@ -550,7 +668,7 @@ const loadMoreData = async () => {
           const startIndex = (currentPage.value - 1) * 50
           const endIndex = startIndex + 50
           const pageData = valuesArray.slice(startIndex, endIndex)
-          getRangeLoraList(pageData)
+          await getRangeLoraList(pageData)
         }
       }
     }
@@ -604,12 +722,46 @@ const handleDocumentClick = (event) => {
 onMounted(() => {
   refreshList()
   document.addEventListener('click', handleDocumentClick, true)
+  window.addEventListener('message', handleCoverUpdatedMessage)
+  window.addEventListener('resize', handleWindowResize)
+  // 监听滚动容器自身尺寸变化：外部容器高度被动态改变（如提示词窗口拉大后重算内嵌高度）、
+  // 窗口 resize、卡片尺寸调整都会体现为 clientHeight 变化，统一在这里补加载填满。
+  // 注意 ResizeObserver 观察的是可见盒子，内容变多不会触发，不会与 ensureFilled 形成回环。
+  if (typeof ResizeObserver !== 'undefined' && scrollContainer.value) {
+    scrollResizeObserver = new ResizeObserver(() => handleWindowResize())
+    scrollResizeObserver.observe(scrollContainer.value)
+  }
+  // 74.86：内嵌高度已交给 CSS flex 分配，窗口拖拽/内容增减由浏览器布局自动重排，
+  // 无需再观察窗口根、main-content 或监听 window-content 滚动。
 })
 
 // 组件卸载时移除事件监听
 onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick, true)
+  window.removeEventListener('message', handleCoverUpdatedMessage)
+  window.removeEventListener('resize', handleWindowResize)
+  if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = null }
+  if (scrollResizeObserver) { scrollResizeObserver.disconnect(); scrollResizeObserver = null }
 })
+
+// 窗口尺寸变化（含拖大管理器窗口）后：高度由 CSS flex 自动重排，这里只负责防抖补加载
+let resizeTimer = null
+let scrollResizeObserver = null
+const handleWindowResize = () => {
+  if (resizeTimer) clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    resizeTimer = null
+    ensureFilled()
+  }, 200)
+}
+
+// ===== 内嵌（prompt_inner）高度自适应（74.86 重构） =====
+// 74.81-74.85 的五版 JS 测高（视觉 top / 布局偏移 / 一屏法 / 标题锚定）全部废弃：
+// 测量值与滚动位置、上方内容高度互相依赖，怎么调都不稳定。
+// 现在高度完全由 CSS flex 分配（见本文件 is-embedded/is-expand 样式与
+// prompt_index.css 的 .weilin-lora-embed-active 链），二态语义不变：
+//  - is-expand（还有数据未加载）：撑满剩余空间，ensureFilled 补加载填卡片；
+//  - is-embedded 默认（全部加载完）：收缩到内容实际高度，小分类不留白。
 
 // 选择Lora
 const selectLora = (lora) => {
@@ -622,7 +774,7 @@ const selectLora = (lora) => {
         lora: lora.name,
         weight: lora.local_info?.strengthMin ? lora.local_info.strengthMin : 1,
         text_encoder_weight: lora.local_info?.strWeight ? lora.local_info.strWeight : 1,
-        loraWorks: lora.local_info?.loraWorks ? lora.local_info.loraWorks : '',
+        loraWorks: addTriggerWords.value ? (lora.local_info?.loraWorks ? lora.local_info.loraWorks : '') : '',
       }
     }, '*')
   } else if (actionAct.value === 1) {
@@ -634,7 +786,7 @@ const selectLora = (lora) => {
         lora: lora.name,
         weight: lora.local_info?.strengthMin ? lora.local_info.strengthMin : 1,
         text_encoder_weight: lora.local_info?.strWeight ? lora.local_info.strWeight : 1,
-        loraWorks: lora.local_info?.loraWorks ? lora.local_info.loraWorks : '',
+        loraWorks: addTriggerWords.value ? (lora.local_info?.loraWorks ? lora.local_info.loraWorks : '') : '',
       }
     }, '*')
   } else if (actionAct.value === 2) {
@@ -646,7 +798,7 @@ const selectLora = (lora) => {
         lora: lora.name,
         weight: lora.local_info?.strengthMin ? lora.local_info.strengthMin : 1,
         text_encoder_weight: lora.local_info?.strWeight ? lora.local_info.strWeight : 1,
-        loraWorks: lora.local_info?.loraWorks ? lora.local_info.loraWorks : '',
+        loraWorks: addTriggerWords.value ? (lora.local_info?.loraWorks ? lora.local_info.loraWorks : '') : '',
       }
     }, '*')
   }
@@ -661,7 +813,8 @@ const addLoraTag = (loraData) => {
     type: 'weilin_prompt_ui_addLoraTag_inner',
     lora: {
       tag: `<wlr:${loraData.model_name}:${loraData.local_info?.strengthMin ? loraData.local_info.strengthMin : 1}:${loraData.local_info?.strWeight ? loraData.local_info.strWeight : 1}>`,
-      loraWorks: loraData.local_info?.loraWorks ? loraData.local_info.loraWorks : '',
+      // 未勾选「添加触发词」时传空串：接收端(prompt_index)会走 else 分支，只插入 wlr 标签、不带触发词
+      loraWorks: addTriggerWords.value ? (loraData.local_info?.loraWorks ? loraData.local_info.loraWorks : '') : '',
     }
   }, '*');
   // 显示提示消息
@@ -685,7 +838,8 @@ defineExpose({
 <style scoped>
 .weilin_prompt_ui_lora-manager {
   overflow: hidden;
-  background: var(--weilin-prompt-ui-primary-bg);
+  /* 窗口底色由 DraggableWindow 根统一画一层（rgba 调色板下多层叠加会变实心） */
+  background: transparent;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -706,6 +860,27 @@ defineExpose({
   box-sizing: border-box;
   min-height: 520px;
   /* 增大最小高度以容纳2.5行卡片 (180px * 2.5 + gap + padding) */
+}
+
+/* 内嵌在提示词窗口（prompt_inner）时：高度由外层 flex 链分配
+   （见 prompt_index.css 的 .weilin-lora-embed-active 一组规则）。
+   默认（全部加载完）：收缩到内容实际高度，小分类不留白；
+   is-expand（还有数据未加载）：作为 flex 项撑满外层容器分配的剩余空间，
+   由 ensureFilled 把卡片补满，超出部分列表内部滚动。 */
+.weilin_prompt_ui_lora-manager.is-embedded {
+  height: auto;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+.weilin_prompt_ui_lora-manager.is-embedded.is-expand {
+  height: 100%;
+  min-height: 240px;
+  flex: 1 1 auto;
+}
+
+.weilin_prompt_ui_lora-manager.is-embedded .weilin_prompt_ui_lora-list-container {
+  min-height: 0;
 }
 
 .weilin_prompt_ui_lora-list-container::-webkit-scrollbar {

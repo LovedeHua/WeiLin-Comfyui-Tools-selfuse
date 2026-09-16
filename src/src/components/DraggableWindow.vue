@@ -137,7 +137,7 @@ onMounted(() => {
 
   // 自动聚焦，ESC 立即生效
   nextTick(() => {
-    windowRef.value?.focus()
+    windowRef.value?.focus({ preventScroll: true })
   })
 
   // 自注册到窗口管理器（父组件重复注册是幂等的）
@@ -169,7 +169,7 @@ const handleWindowMouseDown = (event) => {
   // 否则 windowRef.focus() 会让正在编辑的输入框 blur（如标签编辑会意外退出编辑状态）
   const isEditable = !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))
   if (!isEditable) {
-    windowRef.value?.focus()
+    windowRef.value?.focus({ preventScroll: true })
   }
 }
 
@@ -192,7 +192,7 @@ watch(isActiveWindow, (active) => {
   nextTick(() => {
     const iframe = windowRef.value?.querySelector('iframe')
     if (iframe && document.activeElement === iframe) return
-    windowRef.value?.focus()
+    windowRef.value?.focus({ preventScroll: true })
   })
 })
 
@@ -429,8 +429,12 @@ const handleHeaderContextMenu = (event) => {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 74.95b：禁用滚动锚定，避免内部布局变化（如展开 Lora 模块）时 scrollTop 被浏览器自动跳变 */
+  overflow-anchor: none;
   padding: 16px;
-  background: var(--weilin-prompt-ui-primary-bg);
+  /* rgba 调色板（如 comfy-menu-bg: rgba(53,53,53,0.9)）下窗口只画一层底色：
+     根节点已画 primary-bg，这里再画会叠成 1-(1-a)^2 ≈ 不透明，主题透明度跟随失效 */
+  background: transparent;
   border-radius: 0 0 8px 8px;
 }
 
