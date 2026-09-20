@@ -2437,41 +2437,9 @@ const tryTranslate = async (jsonString, tokenIds) => {
 const tempInputText = ref('')
 
 const finishPromptPutItHistory = () => {
-  // console.log('finishPromptPutItHistory 被调用', new Error().stack);
-  // 去除空格、换行和制表符
-  const trimmedInput = inputText.value.replace(/[\s\t\n]+/g, '');
-  if (selectedLoras.value.length > 0) {
-    if (trimmedInput.length > 0) {
-      const tempLora = selectedLoras.value.filter(lora => !lora.hidden);
-      let putJson = {
-        prompt: inputText.value,
-        lora: "",
-        temp_prompt: tokens.value,
-        temp_lora: selectedLoras.value
-      }
-      if (tempLora.length > 0) {
-        putJson.lora = tempLora
-      }
-      const jsonStr = JSON.stringify(putJson)
-      if (tempInputText.value != jsonStr) {
-        tempInputText.value = jsonStr
-        historyApi.saveHistory({ tag: jsonStr })
-      }
-    }
-  } else {
-    if (tempInputText.value != inputText.value) {
-      const putJson = {
-        prompt: inputText.value,
-        lora: "",
-        temp_prompt: tokens.value,
-        temp_lora: ""
-      }
-      const jsonStr = JSON.stringify(putJson)
-      if (trimmedInput.length > 0) {
-        historyApi.saveHistory({ tag: jsonStr })
-      }
-    }
-  }
+  // 74.97：历史入史统一移到提交队列时（js_node 的 app.queuePrompt 钩子按节点 widget
+  // 内容各自入史），编辑动作不再实时写历史，这里只负责把当前内容同步回节点 widget。
+  // （函数名沿用旧称，12 处调用点语义不变）
   postMessageToWindowsPrompt()
 }
 

@@ -914,8 +914,9 @@ const handleMessage = (event) => {
     windows.value.node_list_window.visible = true
     windowManager.openWindowOnTop('nodeListWindow')
 
-  } else if (event.data.type === 'weilin_prompt_ui_node_executed_save_history') {
-    // 节点执行完成：把该节点的提示词存入历史（多节点工作流各自入史，服务端按内容去重）
+  } else if (event.data.type === 'weilin_prompt_ui_node_queued_save_history') {
+    // 节点提交队列：把该节点的提示词存入历史（74.97 起入史统一在提交时，
+    // 多节点工作流各自入史、不依赖窗口是否打开过；服务端按内容去重）
     // 74.29：对齐收藏夹 73 轮——只存 {prompt, lora}；temp_prompt/temp_lora 恒为空属无用数据，
     // 消费端 setPromptText 对缺失字段均有兜底，旧数据（带 temp_*）读取不受影响
     const executedPrompt = typeof event.data.prompt === 'string' ? event.data.prompt : ''

@@ -185,10 +185,10 @@ function initWindow() {
 }
 initWindow()
 
-// ===== 执行成功后的历史保存（工作流多节点各自入史） =====
-// 放在 execution_success 全局事件而非 onExecuted：
-// onExecuted 只在节点返回 {"ui":...} 时被触发（本插件仅 auto_random=true 时返回 ui），
-// 普通节点收不到 executed 消息；execution_success 在整次执行成功后必发，覆盖所有节点。
+// ===== 提交队列时的历史保存（工作流多节点各自入史，74.97 统一入史时机） =====
+// 入史统一挂在 app.queuePrompt 提交前（见 setup()），不再依赖编辑器窗口是否打开过：
+// 所有提示词节点按当前 widget 内容各自入史，且存的正是本次提交（格式转换后）的文本；
+// 也不再挂在 execution_success 上（执行报错/中断会漏存）。
 // 注意：不做前端去重标记——若保存请求偶发失败/用户清空过历史，"乐观标记"会造成永久遗漏；
 // 重复保存由服务端内容级去重兜底（相同内容刷新置顶，不产生垃圾条目）。
 function collectHistoryTargetNodes(nodes, out, depth) {
@@ -206,7 +206,7 @@ function collectHistoryTargetNodes(nodes, out, depth) {
   })
 }
 
-function saveHistoryForExecutedNodes() {
+function saveHistoryForQueuedNodes() {
   try {
     const graph = window.app && window.app.graph
     if (!graph || !Array.isArray(graph._nodes)) return
@@ -229,12 +229,12 @@ function saveHistoryForExecutedNodes() {
       }
       // js_node 在主窗口运行，window.parent === 主窗口自身，App.vue 监听 message 可直接收到
       window.parent.postMessage({
-        type: 'weilin_prompt_ui_node_executed_save_history',
+        type: 'weilin_prompt_ui_node_queued_save_history',
         prompt: text,
         lora: loraVal
       }, '*')
     })
-  } catch (e) { /* 历史保存失败不影响执行 */ }
+  } catch (e) { /* 历史保存失败不影响提交 */ }
 }
 
 // 诊断入口：报告历史保存视角下每个提示词节点的状态（是否被处理/跳过原因）
@@ -263,7 +263,7 @@ window.weilinHistoryDiag = function () {
   if (graph && Array.isArray(graph._nodes)) walk(graph._nodes, 0)
   console.table(rows)
   console.log(' WeiLin history diag: ' + rows.length + ' prompt node(s) found. ' +
-    'status=OK 的节点在下次执行成功后都会各自保存历史。')
+    'status=OK 的节点在下次提交队列时都会各自保存历史。')
   return rows
 }
 
@@ -331,19 +331,15 @@ app.registerExtension({
   name: "weilin.prompt_ui_node",
   async init() {},
   async setup(app) {
-    // 整次工作流执行成功：遍历所有提示词节点保存历史
-    try {
-      if (app.api && typeof app.api.addEventListener === 'function') {
-        app.api.addEventListener('execution_success', saveHistoryForExecutedNodes)
-      }
-    } catch (e) { /* 事件不可用时静默 */ }
-
-    // 提交队列前做一次格式转换（点生成/快捷键队列都走 app.queuePrompt）
+    // 提交队列前做格式转换 + 历史入史（点生成/快捷键队列都走 app.queuePrompt）。
+    // 入史统一在提交时：所有提示词节点（含从未打开过编辑器窗口的）各自入史，
+    // 且保存的就是本次提交（转换后）的文本；执行报错/中断也会留下记录。
     try {
       if (typeof app.queuePrompt === 'function') {
         const origQueuePrompt = app.queuePrompt.bind(app)
         app.queuePrompt = function (...args) {
           convertAllNodePrompts()
+          saveHistoryForQueuedNodes()
           return origQueuePrompt(...args)
         }
       }
@@ -434,18 +430,41 @@ app.registerExtension({
         }
 
         // 监听节点ID
-        let currentThisId = this.id
-        Object.defineProperty(this, 'id', {
-          get() {
-            return currentThisId;
-          },
-          set(newValue) {
-            currentThisId = newValue;
-            onTisIdChange(newValue);
-          },
-          enumerable: true,
-          configurable: true
-        });
+        // 74.98 修复：新版 ComfyUI 前端把 id/title 实现为原型访问器（写入必须同步内部
+        // 注册状态 _state，见前端 attachNodeToStores/registerNodeState）。旧代码直接
+        // Object.defineProperty 定义自有 get/set 会**遮蔽**原型访问器，配置工作流时
+        // node.id 赋值不再进入前端状态 → 注册节点按状态里的旧 id 判冲突 → 无限重铸
+        // 死循环（[nodeShell] 刷屏、内存疯涨、界面卡死）。改为链式访问器：先调用
+        // 原型原 get/set 保持前端状态同步，再触发插件回调；原型无访问器（旧版前端
+        // 为普通数据属性）时回退旧行为。
+        const chainPropListener = (prop, onChange) => {
+          if (this['__weilin_chained_' + prop]) return // 防重复链式包装
+          let desc = null
+          let proto = Object.getPrototypeOf(this)
+          while (proto) {
+            const d = Object.getOwnPropertyDescriptor(proto, prop)
+            if (d) { desc = d; break }
+            proto = Object.getPrototypeOf(proto)
+          }
+          if (desc && desc.get && desc.set) {
+            Object.defineProperty(this, prop, {
+              configurable: true,
+              enumerable: true,
+              get() { return desc.get.call(this) },
+              set(v) { desc.set.call(this, v); onChange(v) },
+            })
+          } else {
+            const cur = this[prop]
+            Object.defineProperty(this, prop, {
+              configurable: true,
+              enumerable: true,
+              get() { return cur },
+              set(v) { cur = v; onChange(v) },
+            })
+          }
+          this['__weilin_chained_' + prop] = true
+        }
+        chainPropListener('id', onTisIdChange)
 
         function onTisIdChange(newId) {
           // console.log(newId)
@@ -456,21 +475,8 @@ app.registerExtension({
           }
         }
 
-        // 监听 this.title 的变化
-        let currentTitle = this.title; // 缓存当前值
-        Object.defineProperty(this, 'title', {
-          get() {
-            return currentTitle;
-          },
-          set(newValue) {
-            // console.log(`this.title changed from ${currentTitle} to ${newValue}`);
-            currentTitle = newValue;
-            // 触发回调，返回新的 this.title 数据
-            onTitleChange(newValue);
-          },
-          enumerable: true,
-          configurable: true
-        });
+        // 监听 this.title 的变化（同 id：链式原型访问器，保持前端状态同步）
+        chainPropListener('title', onTitleChange);
 
         // 监听 this.title 变化的回调函数
         function onTitleChange(newTitle) {
@@ -712,7 +718,7 @@ app.registerExtension({
         }
         // 注意：历史保存不放这里——onExecuted 只在节点返回 {"ui":...} 时被触发
         // （本插件仅 auto_random=true 时才返回 ui），普通节点收不到 executed 消息。
-        // 历史保存统一走 execution_success 全局事件，见 setup() 中的监听。
+        // 历史保存统一在提交队列时进行，见 setup() 中的 queuePrompt 钩子。
         // console.log(message.positive)
 			};
 
