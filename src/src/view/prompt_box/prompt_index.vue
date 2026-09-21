@@ -1155,6 +1155,13 @@ const selectionActionsPosition = ref({ top: '0px', left: '0px' })
 // 用于防止更新操作频繁触发的标志
 const isUpdatingSelectionBox = ref(false) // 控制选择框更新
 const isUpdatingSelectedTokens = ref(false) // 控制标签选中状态更新
+// 范围选择锚点（shift+右键的起始目标标签索引）：最近一次单选/加选/框选命中的标签；
+// shift+右键时以此为起点选到当前标签之间（资源管理器 shift 多选同款语义），-1 表示尚未建立锚点
+const lastSelectionAnchor = ref(-1)
+// 框选结束抑制标志：在容器外松开鼠标时，浏览器把这次拖拽合成的 click 派发到容器外的
+// 公共祖先节点，会被 handleClickToClearSelection 误判为"点击空白"而清空选中。
+// handleMouseUp 置 true，本次 click 派发完毕后（setTimeout 0）自动复位
+let suppressSelectionReleaseClick = false
 // 用于节流的时间戳
 const lastUpdateTime = ref(0)
 const throttleInterval = 16 // 约60fps
@@ -3184,13 +3191,11 @@ onMounted(() => {
       tokensContainerRef.value.removeEventListener('mousedown', handleMouseDown)
       tokensContainerRef.value.removeEventListener('mousemove', handleMouseMove)
       tokensContainerRef.value.removeEventListener('mouseup', handleMouseUp)
-      tokensContainerRef.value.removeEventListener('mouseleave', handleMouseUp)
 
-      // 重新绑定监听器
+      // 重新绑定监听器（不绑 mouseleave：框选期间指针越界由文档级监听接管，避免出界即取消）
       tokensContainerRef.value.addEventListener('mousedown', handleMouseDown)
       tokensContainerRef.value.addEventListener('mousemove', handleMouseMove)
       tokensContainerRef.value.addEventListener('mouseup', handleMouseUp)
-      tokensContainerRef.value.addEventListener('mouseleave', handleMouseUp)
 
       // 确保容器有合适的样式允许框选
       tokensContainerRef.value.style.userSelect = 'none';
@@ -3208,8 +3213,10 @@ onBeforeUnmount(() => {
     tokensContainerRef.value.removeEventListener('mousedown', handleMouseDown)
     tokensContainerRef.value.removeEventListener('mousemove', handleMouseMove)
     tokensContainerRef.value.removeEventListener('mouseup', handleMouseUp)
-    tokensContainerRef.value.removeEventListener('mouseleave', handleMouseUp)
   }
+  // 清理框选期间挂载的文档级监听（防组件卸载时仍处于框选态残留）
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', handleMouseUp)
   // 清理自定义拖拽的文档级监听器
   document.removeEventListener('mousemove', handleDocumentMouseMove)
   document.removeEventListener('mouseup', handleDocumentMouseUp)
@@ -3282,6 +3289,11 @@ const handleMouseMove = (event) => {
       isSelecting.value = true
       isBoxSelectMode.value = true
 
+      // 挂文档级监听：指针越出容器边界后仍能继续框选（坐标已钳制在容器内），
+      // 任何位置松开鼠标都能正常结束框选，而不是出界即取消
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+
       // 清空选中的标签
       selectedTokens.value = []
 
@@ -3339,10 +3351,19 @@ const handleMouseMove = (event) => {
 
 // 处理鼠标释放事件，结束框选 - 稳定版
 const handleMouseUp = () => {
+  // 无论是否处于框选，都先摘除文档级监听（框选启动时挂上，结束时必须回收）
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', handleMouseUp)
+
   // 清理潜在的框选状态
   isPotentialBoxSelection.value = false
 
   if (isSelecting.value) {
+    // 抑制本次拖拽松开时浏览器合成的 click：mouseup 在容器外时 click 会落到容器外的
+    // 公共祖先节点，被 handleClickToClearSelection 误判为"点击空白"清空选中
+    suppressSelectionReleaseClick = true
+    setTimeout(() => { suppressSelectionReleaseClick = false }, 0)
+
     // 先保存选中的标签数量，然后才结束框选模式
     const selectedCount = selectedTokens.value.length
 
@@ -3357,6 +3378,8 @@ const handleMouseUp = () => {
 
     // 如果有选中的标签，显示操作菜单
     if (selectedCount > 0) {
+      // 框选命中的第一个（索引最小）标签作为范围选择锚点，供 shift+右键接续
+      lastSelectionAnchor.value = Math.min(...selectedTokens.value)
       showSelectionActionsMenu()
     }
   }
@@ -3520,6 +3543,10 @@ const applySelectedStyle = () => {
 }
 
 // 标签上右键：屏蔽浏览器菜单，弹出与框选后一致的操作菜单（复制/禁用/启用/删除）
+// 修饰键扩展（资源管理器多选同款语义）：
+//   Ctrl+右键：多选开关——未选中则加入选中，已选中则从选中移除；不弹菜单
+//   Shift+右键：范围框选——选中「起始目标标签（锚点）~ 当前标签」之间的所有标签，并弹菜单
+//   无修饰键：单选该标签并弹菜单；右键已选中标签则整体取消框选（开关式，不弹菜单）
 const handleTokenContextMenu = (index, event) => {
   // 编辑输入框上右键：保留浏览器原生菜单（复制/粘贴等），事件不再向下拦截
   const t = event.target;
@@ -3528,7 +3555,52 @@ const handleTokenContextMenu = (index, event) => {
   }
   event.preventDefault();
 
-  // 已处于框选状态且右键的正是已选中的标签：再次右键取消框选（开关式），不弹菜单
+  // Ctrl(+Cmd)+右键：多选开关（不弹菜单；若操作菜单开着则先关闭）
+  if (event.ctrlKey || event.metaKey) {
+    if (showSelectionActions.value) {
+      showSelectionActions.value = false;
+      document.removeEventListener('click', closeSelectionActionsOnClickOutside);
+    }
+    const pos = selectedTokens.value.indexOf(index);
+    if (pos === -1) {
+      // 未选中 → 加入选中（保持索引升序，与框选结果一致）
+      selectedTokens.value = [...selectedTokens.value, index].sort((a, b) => a - b);
+      lastSelectionAnchor.value = index; // 加选命中的标签成为新的范围锚点
+    } else {
+      // 已选中 → 从选中移除；锚点保持不变（便于再次 shift 连续选择）
+      selectedTokens.value = selectedTokens.value.filter(v => v !== index);
+    }
+    nextTick(() => applySelectedStyle());
+    return;
+  }
+
+  // Shift+右键：范围框选（锚点 ~ 当前标签，闭区间，索引升序）
+  if (event.shiftKey) {
+    if (lastSelectionAnchor.value < 0) {
+      // 尚无锚点：以当前标签为起点建立锚点，仅选中它
+      lastSelectionAnchor.value = index;
+      selectedTokens.value = [index];
+    } else {
+      const a = Math.min(lastSelectionAnchor.value, index);
+      const b = Math.max(lastSelectionAnchor.value, index);
+      selectedTokens.value = [];
+      for (let i = a; i <= b; i++) selectedTokens.value.push(i);
+    }
+    nextTick(() => applySelectedStyle());
+    // 与框选结束一致：在鼠标位置弹出操作菜单
+    selectionActionsPosition.value = {
+      top: `${event.clientY + 8}px`,
+      left: `${event.clientX}px`
+    };
+    showSelectionActions.value = true;
+    document.removeEventListener('click', closeSelectionActionsOnClickOutside);
+    setTimeout(() => {
+      document.addEventListener('click', closeSelectionActionsOnClickOutside);
+    }, 0);
+    return;
+  }
+
+  // 无修饰键：原有逻辑——右键已选中的标签整体取消框选；否则设为唯一选中并弹菜单
   if (selectedTokens.value.length > 0 && selectedTokens.value.includes(index)) {
     clearSelectedTokens();
     return;
@@ -3536,6 +3608,7 @@ const handleTokenContextMenu = (index, event) => {
 
   // 否则将其设为唯一选中（替换原有选中），并弹出操作菜单
   selectedTokens.value = [index];
+  lastSelectionAnchor.value = index; // 单选命中的标签成为新的范围锚点
   nextTick(() => applySelectedStyle());
 
   // 菜单定位到鼠标位置（弹在光标下方）
@@ -3546,6 +3619,7 @@ const handleTokenContextMenu = (index, event) => {
   showSelectionActions.value = true;
 
   // 点击外部关闭菜单（与框选菜单的行为一致）
+  document.removeEventListener('click', closeSelectionActionsOnClickOutside);
   setTimeout(() => {
     document.addEventListener('click', closeSelectionActionsOnClickOutside);
   }, 0);
@@ -3756,6 +3830,8 @@ const clearSelectedTokens = () => {
 
   // 清空选中状态数组
   selectedTokens.value = []
+  // 同时重置范围选择锚点（shift+右键的起始目标），避免残留到下一次选择
+  lastSelectionAnchor.value = -1
 
   // 如果操作菜单可见，也关闭它
   if (showSelectionActions.value) {
@@ -3766,6 +3842,9 @@ const clearSelectedTokens = () => {
 
 // 处理点击空白区域取消框选状态
 const handleClickToClearSelection = (event) => {
+  // 框选拖拽结束（尤其在容器外松开）时浏览器合成的 click 不算"点击空白"，忽略之
+  if (suppressSelectionReleaseClick) return
+
   // 只有当有选中项时才需要处理
   if (selectedTokens.value.length === 0) return;
 
@@ -3816,7 +3895,6 @@ onUnmounted(() => {
     tokensContainerRef.value.removeEventListener('mousedown', handleMouseDown)
     tokensContainerRef.value.removeEventListener('mousemove', handleMouseMove)
     tokensContainerRef.value.removeEventListener('mouseup', handleMouseUp)
-    tokensContainerRef.value.removeEventListener('mouseleave', handleMouseUp)
   }
   // 清理选择框
   removeSelectionBox()

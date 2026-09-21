@@ -10,6 +10,31 @@
             </button>
             <input type="text" v-model="searchQuery" :placeholder="t('history.search_favorites_placeholder')"
                 @input="filterFavorites" class="search-input" />
+            <!-- 日期筛选：按 create_time 落在 [开始日 00:00, 结束日 24:00) 过滤；任一端留空表示不限制 -->
+            <div class="date-filter" ref="dateFilterRef">
+                <button class="date-filter-btn" :class="{ 'date-filter-active': dateFilterActive }"
+                    @click.stop="showDateFilter = !showDateFilter" :title="dateFilterTitle">
+                    <svg viewBox="0 0 24 24" width="16" height="16">
+                        <path
+                            d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z" />
+                    </svg>
+                </button>
+                <div v-if="showDateFilter" class="date-filter-pop" @click.stop>
+                    <!-- 用 div 而非 label：label 会把内部非交互元素的点击转发给第一个表单控件（dfi-input），
+                         导致点年/月数字时 input 重新聚焦、openPop 把 viewMode 重置回 day，年/月面板永远弹不出来 -->
+                    <div class="date-filter-row">
+                        <span class="date-filter-label">{{ t('history.date_from') }}</span>
+                        <DateFilterInput v-model="dateFrom" @update:model-value="filterFavorites" />
+                    </div>
+                    <div class="date-filter-row">
+                        <span class="date-filter-label">{{ t('history.date_to') }}</span>
+                        <DateFilterInput v-model="dateTo" @update:model-value="filterFavorites" />
+                    </div>
+                    <button class="date-filter-clear" :disabled="!dateFilterActive" @click="clearDateFilter">
+                        {{ t('history.date_clear') }}
+                    </button>
+                </div>
+            </div>
 
             <input type="checkbox" v-if="isDeleteBatch" v-model="selectAllTags" :value="1" class="tag-checkbox"
                 @change="selectAllTagsChange" />
@@ -83,7 +108,7 @@
                     </button>
                     <input type="checkbox" v-if="isDeleteBatch" v-model="selectedTags" :value="item.id_index"
                         class="tag-checkbox" />
-                    <span class="favor-time">{{ formatRelativeTime(item.create_time) }}</span>
+                    <span class="favor-time" :title="formatFullTime(item.create_time)">{{ formatRelativeTime(item.create_time) }}</span>
                 </div>
             </li>
         </ul>
@@ -113,11 +138,35 @@ import { historyApi } from "@/api/history";
 import { loraApi } from "@/api/lora";
 import message from "@/utils/message";
 import { useI18n } from 'vue-i18n'
+import DateFilterInput from '@/components/DateFilterInput.vue'
 
 const { t } = useI18n()
 const searchQuery = ref('');
 const favorites = ref([]); // 存储收藏夹记录
 const filteredFavorites = ref([]); // 存储过滤后的收藏夹记录
+// 日期筛选（YYYY-MM-DD 字符串）：开始/结束任一端留空表示该侧不限制；按本地时区解释
+const dateFrom = ref('');
+const dateTo = ref('');
+// 日期筛选按钮 + 弹出面板：收敛工具栏空间，摘要放按钮悬浮提示；
+// 面板内日期输入用自绘迷你日历组件 DateFilterInput（原生 date 控件的日历会吞页面点击）
+const showDateFilter = ref(false);
+const dateFilterRef = ref(null);
+const dateFilterActive = computed(() => !!(dateFrom.value || dateTo.value));
+// 悬浮提示：无筛选显示功能名，有筛选显示完整范围（按钮本体为纯图标，摘要挪到这里）
+const dateFilterTitle = computed(() => {
+    if (!dateFilterActive.value) return t('history.date_filter');
+    return `${t('history.date_filter')}: ${dateFrom.value || '...'} ~ ${dateTo.value || '...'}`;
+});
+const clearDateFilter = () => {
+    dateFrom.value = '';
+    dateTo.value = '';
+    filterFavorites();
+};
+const closeDateFilterOnClickOutside = (e) => {
+    if (showDateFilter.value && dateFilterRef.value && !dateFilterRef.value.contains(e.target)) {
+        showDateFilter.value = false;
+    }
+};
 const selectedTags = ref([]);
 const showDeleteDialog = ref(false)
 
@@ -307,18 +356,30 @@ const closeDeleteDialog = () => {
     itemToDelete.value = null
 }
 
-// 相对时间显示：与历史记录页一致（刚刚 / N分钟前 / N小时前 / 昨天 / N天前 / 超过一个月显示日期）
+// 相对时间显示：与历史记录页一致——24 小时内用相对时间（刚刚 / N分钟前 / N小时前），
+// 超过 24 小时显示日期（当年 MM-DD，往年带年份 YYYY-MM-DD）；
+// 精确到分的时间通过时间戳 span 的 :title（formatFullTime）查看
 const formatRelativeTime = (unixSeconds) => {
     if (!unixSeconds) return ''
     const diff = Math.floor((Date.now() - unixSeconds * 1000) / 1000)
     if (diff < 60) return t('history.time.justNow')
     if (diff < 3600) return t('history.time.minutesAgo', { n: Math.floor(diff / 60) })
     if (diff < 86400) return t('history.time.hoursAgo', { n: Math.floor(diff / 3600) })
-    const days = Math.floor(diff / 86400)
-    if (days === 1) return t('history.time.yesterday')
-    if (days < 30) return t('history.time.daysAgo', { n: days })
+    return formatDateShort(unixSeconds)
+}
+
+// 短日期（YYYY-MM-DD，带年份）：超过 24 小时的时间戳主显示
+const formatDateShort = (unixSeconds) => {
     const d = new Date(unixSeconds * 1000)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// 完整时间（YYYY-MM-DD HH:MM）：用于时间戳 span 的悬浮 title，弥补相对时间丢失的精度
+const formatFullTime = (unixSeconds) => {
+    if (!unixSeconds) return ''
+    const d = new Date(unixSeconds * 1000)
+    const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${hhmm}`
 }
 
 
@@ -328,7 +389,7 @@ const fetchFavorites = () => {
         .getFavorite()
         .then((res) => {
             favorites.value = res.data;
-            filteredFavorites.value = favorites.value;
+            filterFavorites(); // 初始化/刷新后按当前关键词+日期条件重新过滤（保留筛选状态）
             // 收集全部收藏的跟随 Lora 名字，批量检测存在性（未检测过的才发请求）
             const allNames = []
             favorites.value.forEach(item => allNames.push(...itemLoraNames(item)))
@@ -340,9 +401,13 @@ const fetchFavorites = () => {
 };
 
 const filterFavorites = () => {
-    // 根据搜索查询过滤收藏夹记录
+    // 组合过滤：关键词（tag 包含）+ 日期范围（create_time 落在 [开始日 00:00, 结束日次日 00:00)）
+    const fromTs = dateFrom.value ? new Date(`${dateFrom.value}T00:00:00`).getTime() / 1000 : null
+    const toTs = dateTo.value ? new Date(`${dateTo.value}T00:00:00`).getTime() / 1000 + 86400 : null
     filteredFavorites.value = favorites.value.filter(item =>
         item.tag.includes(searchQuery.value)
+        && (fromTs === null || (item.create_time && item.create_time >= fromTs))
+        && (toTs === null || (item.create_time && item.create_time < toTs))
     );
 };
 
@@ -388,10 +453,12 @@ const handleWindowMessage = (event) => {
 onMounted(() => {
     fetchFavorites();
     window.addEventListener('message', handleWindowMessage)
+    document.addEventListener('click', closeDateFilterOnClickOutside);
 });
 
 onUnmounted(() => {
     window.removeEventListener('message', handleWindowMessage)
+    document.removeEventListener('click', closeDateFilterOnClickOutside);
 })
 </script>
 
@@ -428,6 +495,99 @@ h1 {
     outline: none;
     border-color: var(--weilin-prompt-ui-primary-color);
     box-shadow: 0 0 0 2px var(--weilin-prompt-ui-primary-color-fade);
+}
+
+/* 日期筛选：单按钮 + 弹出面板（取代裸露的两个 date 输入框） */
+.date-filter {
+    position: relative;
+    flex: 0 0 auto;
+    /* 与右侧图标按钮组的 margin-left:10px 保持同一间隙节奏 */
+    margin-left: 10px;
+}
+
+/* 与同行图标按钮（收藏/批量删除）同规格：32x32 方钮、纯图标居中 */
+.date-filter-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    border-radius: 4px;
+    background: var(--weilin-prompt-ui-secondary-bg, var(--weilin-prompt-ui-input-bg));
+    color: var(--weilin-prompt-ui-primary-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.date-filter-btn svg {
+    fill: currentColor;
+}
+
+.date-filter-btn:hover {
+    background: var(--weilin-prompt-ui-hover-bg-color);
+    border-color: var(--weilin-prompt-ui-primary-color);
+}
+
+/* 有筛选条件时高亮按钮（图标+边框变主色），一眼可辨当前处于筛选状态 */
+.date-filter-btn.date-filter-active {
+    color: var(--weilin-prompt-ui-primary-color);
+    border-color: var(--weilin-prompt-ui-primary-color);
+    background: var(--weilin-prompt-ui-primary-color-fade, rgba(24, 144, 255, 0.12));
+}
+
+.date-filter-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 230px;
+    padding: 10px;
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    border-radius: 6px;
+    background: var(--weilin-prompt-ui-secondary-background, var(--weilin-prompt-ui-input-bg));
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.date-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--weilin-prompt-ui-primary-text);
+}
+
+.date-filter-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* 日期输入与迷你日历的样式全部内聚在 DateFilterInput 组件（scoped），此处无需重复定义 */
+
+.date-filter-clear {
+    align-self: flex-end;
+    padding: 4px 12px;
+    border: 1px solid var(--weilin-prompt-ui-border-color);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--weilin-prompt-ui-primary-text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.date-filter-clear:hover:not(:disabled) {
+    border-color: var(--weilin-prompt-ui-primary-color);
+    color: var(--weilin-prompt-ui-primary-color);
+}
+
+.date-filter-clear:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .history-list {

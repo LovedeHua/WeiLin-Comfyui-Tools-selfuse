@@ -75,11 +75,17 @@
 }
 
 /* 拖拽中的原标签（原位占位）：虚线轮廓与外框保持清晰，仅内容淡化。
-   不能用整体 opacity 淡化——那会连虚线框一起变淡，导致原位置难以辨认 */
-.token-item-box.weilin-dragging-src {
+   不能用整体 opacity 淡化——那会连虚线框一起变淡，导致原位置难以辨认。
+   补 :hover 变体并给 box-shadow 加 !important：否则 .token-item-box:hover（定义更靠后、
+   同特异性）会在指针扫过占位标签时套上 hover 背景/阴影/边框色/上浮，移开又恢复，
+   造成拖拽期间边框高亮"时亮时暗" */
+.token-item-box.weilin-dragging-src,
+.token-item-box.weilin-dragging-src:hover,
+.token-item-box.weilin-dragging-src.token-item-box-selected {
     border: 1px solid var(--weilin-prompt-ui-primary-color, #1890ff) !important;
     background-color: transparent !important;
-    box-shadow: none;
+    box-shadow: none !important;
+    transform: none;
 }
 
 /* 只淡化内容，保留轮廓与外框清晰可见 */
@@ -1582,11 +1588,16 @@
 
 /* 框选高亮样式（零布局影响）：
    border 保持基础 1px 只染色，第二层用 box-shadow 外环补齐视觉 2px 边框。
-   原写法 border: 2px 会让每个选中标签宽高各 +2px，多选时标签排版移位 */
-.token-item-box-selected {
+   原写法 border: 2px 会让每个选中标签宽高各 +2px，多选时标签排版移位。
+   注意：.token-item-box:hover (0,2,0) 的 box-shadow/transform 会覆盖本类 (0,1,0)，
+   导致选中高亮“时亮时暗”——box-shadow 加 !important 并补 :hover 变体压制，
+   选中态同时取消 hover 的 translateY 浮动 */
+.token-item-box-selected,
+.token-item-box-selected:hover {
   border-color: #4285f4 !important;
-  box-shadow: 0 0 0 1px #4285f4, 0 0 8px #4285f455;
+  box-shadow: 0 0 0 1px #4285f4, 0 0 8px #4285f455 !important;
   background-color: rgba(66, 133, 244, 0.08) !important;
+  transform: none;
   transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
   z-index: 2;
 }
