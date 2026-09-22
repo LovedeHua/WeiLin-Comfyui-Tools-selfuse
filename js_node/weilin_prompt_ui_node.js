@@ -135,6 +135,12 @@ function stopLiteGraphEvent(event) {
 function protectDomWidgetEvents(element) {
   if (!element) return;
 
+  // 必须在「冒泡阶段」拦截，不能用 capture。
+  // capture 阶段 stopPropagation 会阻止事件继续传播到 target，于是组件内部控件自己绑定的
+  // 监听器（按钮的 click、拖动把手的 mousedown、权重输入框的 mousedown 等）全部收不到事件，
+  // 表现为「节点里的 ＋ 按钮点不动（打不开 Lora 管理器）」、查看/移除按钮无反应。
+  // 冒泡阶段拦截同样能把事件挡在 LiteGraph 之前（它的监听在更外层容器），
+  // 但内部控件已经先收到事件，交互正常。
   [
     'pointerdown',
     'pointerup',
@@ -147,7 +153,7 @@ function protectDomWidgetEvents(element) {
     'touchstart',
     'touchend',
   ].forEach(eventName => {
-    element.addEventListener(eventName, stopLiteGraphEvent, { capture: true });
+    element.addEventListener(eventName, stopLiteGraphEvent, false);
   });
 }
 
@@ -184,6 +190,48 @@ function initWindow() {
   document.head.appendChild(link);
 }
 initWindow()
+
+// ===== lora_stack.js 就绪等待 & Lora堆数据同步 =====
+// lora_stack.js 是 initWindow() 里动态注入的异步脚本（script.async = true），可能晚于
+// 节点创建或消息到达。此前两处都直接调用 renderAllLoras：脚本未就绪时它还是 undefined，
+// 抛 TypeError 且没有人重试 → 表现为「堆里明明有数据，节点却渲染成空」。
+// 这里统一轮询等待，超时打日志（不再静默失败）。
+function whenLoraStackReady(callback, timeout = 10000) {
+  if (typeof renderAllLoras === 'function') {
+    callback();
+    return;
+  }
+  const startedAt = Date.now();
+  const timer = setInterval(() => {
+    if (typeof renderAllLoras === 'function') {
+      clearInterval(timer);
+      callback();
+    } else if (Date.now() - startedAt > timeout) {
+      clearInterval(timer);
+      console.warn('[WeiLin] lora_stack.js 未在 ' + timeout + 'ms 内就绪，Lora堆无法渲染；请确认 /weilin/prompt_ui/file/lora_stack.js 可访问');
+    }
+  }, 50);
+}
+
+// 把隐藏 widget 里的 JSON 同步到 window.weilinGlobalSelectedLoras 并渲染（等脚本就绪后执行）
+function syncLoraStackFromWidget(seed, tempLoraWidget, fallbackEl) {
+  whenLoraStackReady(() => {
+    window.weilinGlobalSelectedLoras = window.weilinGlobalSelectedLoras || [];
+    const raw = getWidgetValue(tempLoraWidget, fallbackEl);
+    let list = [];
+    if (raw && raw.length > 0) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch (e) {
+        // 内容损坏时按空堆处理：否则这里抛错会导致整块列表再也不渲染
+        console.warn('[WeiLin] Lora堆内容解析失败，按空堆处理:', e);
+      }
+    }
+    window.weilinGlobalSelectedLoras[seed] = list;
+    renderAllLoras(seed);
+  });
+}
 
 // ===== 提交队列时的历史保存（工作流多节点各自入史，74.97 统一入史时机） =====
 // 入史统一挂在 app.queuePrompt 提交前（见 setup()），不再依赖编辑器窗口是否打开过：
@@ -669,13 +717,9 @@ app.registerExtension({
                 setWidgetValue(tempLoraWidget, "");
               }
 
-              const tempLoraStr = getWidgetValue(tempLoraWidget, nodeTextAreaList[3]);
-              if (tempLoraStr.length > 0) {
-                window.weilinGlobalSelectedLoras[thisNodeSeed] = JSON.parse(tempLoraStr)
-              }else {
-                window.weilinGlobalSelectedLoras[thisNodeSeed]= []
-              }
-              renderAllLoras(thisNodeSeed)
+              // 等 lora_stack.js 就绪后再同步并渲染（它是异步脚本，此前直接调用
+              // renderAllLoras 在脚本未到位时会抛错，且无人重试 → 列表渲染为空）
+              syncLoraStackFromWidget(thisNodeSeed, tempLoraWidget, nodeTextAreaList[3])
             }
           
           }else if (event.data.type === "weilin_prompt_ui_prompt_node_finish_lora_stack_" + thisNodeSeed) {
@@ -887,16 +931,12 @@ function createLoraStackWidget(node, seed, ptEl) {
     });
   }
 
+  // 保留 300ms 延时：工作流里保存的 widget 值是在 onNodeCreated 之后才写入的，
+  // 立即读会得到空值（堆内容靠隐藏 widget temp_lora_str 恢复）。
+  // 之后再加「等 lora_stack.js 就绪」的守卫：脚本未加载完时不再抛错+静默失败。
   setTimeout(() => {
-    const tempLoraValue = getWidgetValue(tempLoraWidget, prTempLoraEl);
-    if (tempLoraValue.length > 0) {
-      window.weilinGlobalSelectedLoras[seed] = JSON.parse(tempLoraValue)
-    }else {
-      window.weilinGlobalSelectedLoras[seed]= []
-    }
-    renderAllLoras(seed)
-    // console.log(window.weilinGlobalSelectedLoras)
-  },300)
+    syncLoraStackFromWidget(seed, tempLoraWidget, prTempLoraEl)
+  }, 300)
 
   // console.log(node)
 }

@@ -2,8 +2,6 @@
 window.weilinGlobalSelectedLoras = [];
 
 
-// window.addEventListener('message', handleWindowMessage);
-
 // Open Lora Manager
 function openLoraManager(event) {
    const seedThis = event.getAttribute("data-seed");
@@ -15,13 +13,11 @@ function openLoraManager(event) {
    }, '*');
 }
 
-// Handle window messages
-function handleWindowMessage(event) {
-   if (event.data.type === 'weilin_prompt_ui_node_lora_stack_update_lora_stack') {
-       const seed = event.data.seed;
-       renderAllLoras(seed)
-   }
-}
+// 说明：原先这里有一个 handleWindowMessage 及其被注释掉的 message 监听，
+// 处理的消息类型 'weilin_prompt_ui_node_lora_stack_update_lora_stack' 全仓库
+// 都没有发送方（死代码），监听本身也一直处于注释状态，故一并删除，
+// 避免日后误以为"改这里能让节点重新渲染"。
+// 节点列表的刷新入口：addLora() / removeLora() / toggleHideLora() 内部调用 renderAllLoras()。
 
 // Add a new Lora
 function addLora(seed, lora) {

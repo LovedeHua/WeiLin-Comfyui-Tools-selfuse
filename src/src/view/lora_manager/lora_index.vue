@@ -27,6 +27,31 @@
         </svg>
       </button>
 
+      <!-- Lora 卡片排序：自绘下拉菜单（不用原生 select —— 原生下拉会吞掉页面下一次点击） -->
+      <div :class="`${prefix}sort-bar`" ref="sortBarRef">
+        <button :class="[`${prefix}sort-btn`, `${prefix}sort-trigger`]" @click="showSortMenu = !showSortMenu"
+          :title="'排序方式：' + SORT_LABELS[sortKey]">
+          <span>{{ SORT_LABELS[sortKey] }}</span>
+          <svg :class="[`${prefix}sort-caret`, { open: showSortMenu }]" viewBox="0 0 24 24" width="12" height="12">
+            <path d="M7 10l5 5 5-5z" />
+          </svg>
+        </button>
+
+        <button :class="[`${prefix}sort-btn`, `${prefix}sort-dir`]" @click="toggleSortDir" :disabled="sortKey === 'default'"
+          :title="sortKey === 'default' ? '「默认排序」不区分升降序' : (sortDir === 'asc' ? '当前升序，点击切换为降序' : '当前降序，点击切换为升序')">
+          {{ sortDir === 'asc' ? '↑' : '↓' }}
+        </button>
+
+        <!-- 下拉面板 -->
+        <div v-if="showSortMenu" :class="`${prefix}sort-menu`">
+          <div v-for="opt in SORT_OPTIONS" :key="opt.key"
+            :class="[`${prefix}sort-option`, { active: sortKey === opt.key }]" @click="chooseSort(opt.key)">
+            <span>{{ opt.label }}</span>
+            <span v-if="sortKey === opt.key" :class="`${prefix}sort-check`">✓</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 添加复选框区域 -->
       <div class="checkbox-container">
         <label :class="`${prefix}checkbox-label`">
@@ -200,22 +225,66 @@ watch(addTriggerWords, (newVal) => {
 // 分页相关
 const currentPage = ref(1)
 const pageSize = ref(50) // 每页显示的数量
-const totalPages = computed(() => {
-  if (currentCategory.value === 'all') {
-    const rootFolder = selectFolder.value
-    if (rootFolder) {
-      const valuesArray = Object.values(rootFolder)
-      return Math.ceil(valuesArray.length / pageSize.value)
+const total = ref(0) // 后端返回的当前视图总条数（用于判断是否加载完）
+// 当前视图完整扁平路径数组：排序与分页的基准（传给后端排好序再按页返回）
+const currentViewPaths = ref([])
+// Lora 卡片排序：default=默认(保持原目录顺序) / name=名称 / size=文件大小 / mtime=修改时间；asc 升序 / desc 降序
+const LORA_SORT_KEY = 'weilin_prompt_ui_lora_sort'
+const SORT_OPTIONS = [
+  { key: 'default', label: '默认排序' },
+  { key: 'name', label: '按名称' },
+  { key: 'size', label: '按大小' },
+  { key: 'mtime', label: '按时间' },
+]
+const SORT_LABELS = SORT_OPTIONS.reduce((m, o) => { m[o.key] = o.label; return m }, {})
+const _loadLoraSort = () => {
+  try {
+    const s = JSON.parse(localStorage.getItem(LORA_SORT_KEY))
+    if (s && SORT_LABELS[s.key] && ['asc', 'desc'].includes(s.dir)) {
+      return { key: s.key, dir: s.dir }
     }
-  } else {
-    const rootFolder = selectFolder.value[currentSubCategory.value]
-    if (rootFolder) {
-      const valuesArray = Object.values(rootFolder)
-      return Math.ceil(valuesArray.length / pageSize.value)
-    }
-    return 1
-  }
+  } catch (e) { /* ignore */ }
+  // 未设置过 → 默认排序（保持插件原有的目录顺序，不做额外排序）
+  return { key: 'default', dir: 'asc' }
+}
+const _loraSort0 = _loadLoraSort()
+const sortKey = ref(_loraSort0.key)
+const sortDir = ref(_loraSort0.dir)
+const saveLoraSort = () => {
+  try { localStorage.setItem(LORA_SORT_KEY, JSON.stringify({ key: sortKey.value, dir: sortDir.value })) } catch (e) { /* ignore */ }
+}
+// 下拉菜单开关 + 根节点（用于点击外部判定）
+const showSortMenu = ref(false)
+const sortBarRef = ref(null)
+// 选中排序方式：只切换字段，不改升降序；watch([sortKey, sortDir]) 会重新拉取第一页
+const chooseSort = (key) => {
+  showSortMenu.value = false
+  if (sortKey.value !== key) sortKey.value = key
+}
+// 升降序切换（默认排序无升降序概念）
+const toggleSortDir = () => {
+  if (sortKey.value === 'default') return
+  sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+}
+// 自绘下拉的关闭逻辑：不用原生 select（原生下拉开合会吞掉页面下一次点击），
+// 因此自己监听 mousedown(capture) 判断点击是否落在组件外，另支持 Esc 关闭
+const onSortDocMouseDown = (e) => {
+  if (!showSortMenu.value) return
+  const root = sortBarRef.value
+  if (root && !root.contains(e.target)) showSortMenu.value = false
+}
+const onSortDocKeydown = (e) => {
+  if (e.key === 'Escape') showSortMenu.value = false
+}
+onMounted(() => {
+  document.addEventListener('mousedown', onSortDocMouseDown, true)
+  document.addEventListener('keydown', onSortDocKeydown)
 })
+onUnmounted(() => {
+  document.removeEventListener('mousedown', onSortDocMouseDown, true)
+  document.removeEventListener('keydown', onSortDocKeydown)
+})
+const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
 
 const handEnterCard = () => {
   // console.log("enter")
@@ -476,13 +545,11 @@ const searchLoraList = async () => {
     const res = await loraApi.searchLoraGetFolderList(searchQuery.value)
     selectFolder.value = res.data
     if (selectFolder.value.length > 0) {
-      currentPage.value = 1 // 重置页码
-      const valuesArray = Object.values(selectFolder.value)
-      // 根据当前页码获取对应的50条数据
-      const startIndex = (currentPage.value - 1) * 50
-      const endIndex = startIndex + 50
-      const pageData = valuesArray.slice(startIndex, endIndex)
-      getRangeLoraList(pageData)
+      // 搜索结果本身就是路径数组，作为当前视图路径参与排序+分页
+      currentViewPaths.value = res.data
+      hasLoadedAll.value = false
+      currentPage.value = 1
+      getRangeLoraList()
     }
   } catch (error) {
     console.error('Failed to get folder list:', error)
@@ -496,40 +563,18 @@ const paginatedLoraList = ref([])
 
 // 选择分类时重置子分类和页码
 const selectCategory = (category) => {
-  if (category === "all") {
-    paginatedLoraList.value = []
-    currentCategory.value = category
-    currentSubCategory.value = "/"
-    selectFolder.value = folderList.value[category]
-    const rootFolder = selectFolder.value
-    if (rootFolder) {
-      hasLoadedAll.value = false
-      currentPage.value = 1 // 重置页码
-      const valuesArray = Object.values(rootFolder)
-      // 根据当前页码获取对应的50条数据
-      const startIndex = (currentPage.value - 1) * 50
-      const endIndex = startIndex + 50
-      const pageData = valuesArray.slice(startIndex, endIndex)
-      getRangeLoraList(pageData)
-    }
-  } else {
-    paginatedLoraList.value = []
-    currentCategory.value = category
-    currentSubCategory.value = "/"
-    selectFolder.value = folderList.value[category]
-    const rootFolder = selectFolder.value["/"]
-    if (rootFolder) {
-      hasLoadedAll.value = false
-      currentPage.value = 1 // 重置页码
-      const valuesArray = Object.values(rootFolder)
-      // 根据当前页码获取对应的50条数据
-      const startIndex = (currentPage.value - 1) * 50
-      const endIndex = startIndex + 50
-      const pageData = valuesArray.slice(startIndex, endIndex)
-      getRangeLoraList(pageData)
-    }
+  paginatedLoraList.value = []
+  currentCategory.value = category
+  currentSubCategory.value = "/"
+  selectFolder.value = folderList.value[category]
+  // "all" 用整个分类数组；其它分类用其 "/" 子分类（Object.values 对数组/对象都返回元素路径数组，flat 兜底嵌套）
+  const rootFolder = category === "all" ? selectFolder.value : selectFolder.value["/"]
+  if (rootFolder) {
+    currentViewPaths.value = Object.values(rootFolder).flat()
+    hasLoadedAll.value = false
+    currentPage.value = 1
+    getRangeLoraList()
   }
-
 }
 
 const selectSecondCategory = (subCategory) => {
@@ -538,29 +583,45 @@ const selectSecondCategory = (subCategory) => {
     paginatedLoraList.value = []
     const rootFolder = selectFolder.value[currentSubCategory.value]
     if (rootFolder) {
+      // 子分类内部可能是嵌套 dict，Object.values(...).flat() 安全提取路径数组
+      currentViewPaths.value = Object.values(rootFolder).flat()
       hasLoadedAll.value = false
       currentPage.value = 1 // 重置页码
-      const valuesArray = Object.values(rootFolder)
-      // 根据当前页码获取对应的50条数据
-      const startIndex = (currentPage.value - 1) * 50
-      const endIndex = startIndex + 50
-      const pageData = valuesArray.slice(startIndex, endIndex)
-      getRangeLoraList(pageData)
+      getRangeLoraList()
     }
   }
 }
 
 
-const getRangeLoraList = async (arr) => {
-  const res = await loraApi.getLoraRangeList(arr)
+// 排序/分页：把当前视图的完整路径数组交给后端排序+分页（sort_key/sort_dir/page/page_size）
+const getRangeLoraList = async () => {
+  const res = await loraApi.getLoraRangeList({
+    range: currentViewPaths.value,
+    sort_key: sortKey.value,
+    sort_dir: sortDir.value,
+    page: currentPage.value,
+    page_size: pageSize.value,
+  })
   if (currentPage.value === 1) {
     paginatedLoraList.value = res.data.loras
   } else {
     paginatedLoraList.value = paginatedLoraList.value.concat(res.data.loras)
   }
+  // total 来自后端（已按排序后的全集计算），据此判定是否已加载完全部
+  total.value = res.data.total
+  hasLoadedAll.value = paginatedLoraList.value.length >= total.value
   // 渲染后检查内容是否填满容器，不足则继续补加载（窗口大时底部空白）
   nextTick(ensureFilled)
 }
+
+// 排序方式变化：持久化并重新拉取第一页
+watch([sortKey, sortDir], () => {
+  saveLoraSort()
+  currentPage.value = 1
+  hasLoadedAll.value = false
+  paginatedLoraList.value = []
+  getRangeLoraList()
+})
 
 const getAllLoraList = async () => {
   if (intervalId.value != null) {
@@ -622,58 +683,21 @@ const refreshList = async () => {
 }
 
 
-// 加载更多数据
+// 加载更多数据（后端已排序分页，前端只负责翻页）
 const loadMoreData = async () => {
-  // 如果已经是最后一页，标记为全部加载完成
-  if (currentPage.value >= totalPages.value) {
-    hasLoadedAll.value = true
+  // 已加载完全部则不再请求
+  if (hasLoadedAll.value) {
     return
   }
 
   isLoadingMore.value = true
 
   try {
-    // 增加页码
+    // 增加页码后向后端拉取下一页（排序/范围已由 currentViewPaths + sort 决定）
     currentPage.value++
-    // 加载更多数据
-    if (isSearch.value) {
-      // selectFolder 已在 searchLoraList 里存好搜索结果；原先这里写
-      // `selectFolder.value = res.data` 引用了不存在的 res，一进搜索分页就抛
-      // ReferenceError，导致搜索模式下 hasLoadedAll 永远无法置真。
-      if (selectFolder.value.length > 0) {
-        const valuesArray = Object.values(selectFolder.value)
-        // 根据当前页码获取对应的50条数据
-        const startIndex = (currentPage.value - 1) * 50
-        const endIndex = startIndex + 50
-        const pageData = valuesArray.slice(startIndex, endIndex)
-        await getRangeLoraList(pageData)
-      }
-    } else {
-      if (currentCategory.value === "all") {
-        selectFolder.value = folderList.value[currentCategory.value]
-        const rootFolder = selectFolder.value
-        if (rootFolder) {
-          const valuesArray = Object.values(rootFolder)
-          // 根据当前页码获取对应的50条数据
-          const startIndex = (currentPage.value - 1) * 50
-          const endIndex = startIndex + 50
-          const pageData = valuesArray.slice(startIndex, endIndex)
-          await getRangeLoraList(pageData)
-        }
-      } else {
-        const rootFolder = selectFolder.value[currentSubCategory.value]
-        if (rootFolder) {
-          const valuesArray = Object.values(rootFolder)
-          // 根据当前页码获取对应的50条数据
-          const startIndex = (currentPage.value - 1) * 50
-          const endIndex = startIndex + 50
-          const pageData = valuesArray.slice(startIndex, endIndex)
-          await getRangeLoraList(pageData)
-        }
-      }
-    }
-
-
+    await getRangeLoraList()
+  } catch (error) {
+    console.error('Failed to load more lora:', error)
   } finally {
     isLoadingMore.value = false
   }
@@ -1100,16 +1124,133 @@ defineExpose({
   background: var(--weilin-prompt-ui-scrollbar-thumb-hover);
 }
 
+/* ========== Lora 卡片排序（内联在顶部搜索栏同一行，分段控件样式） ========== */
+.weilin_prompt_ui_sort-bar {
+  position: relative;   /* 下拉面板的定位基准 */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+/* 排序按钮基础样式：与搜索框同高（30px），字号与顶部栏其它文字一致 */
+.weilin_prompt_ui_sort-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--weilin-prompt-ui-primary-text);
+  background: color-mix(in srgb, var(--weilin-prompt-ui-primary-bg) 94%, #000 6%);
+  border: 1px solid var(--weilin-prompt-ui-border-color);
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.weilin_prompt_ui_sort-btn:hover {
+  background: var(--weilin-prompt-ui-hover-bg-color);
+}
+
+/* 「默认排序」时升降序按钮无意义，置灰禁用 */
+.weilin_prompt_ui_sort-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.weilin_prompt_ui_sort-btn:disabled:hover {
+  background: color-mix(in srgb, var(--weilin-prompt-ui-primary-bg) 94%, #000 6%);
+}
+
+/* 触发按钮：左文字右箭头，固定最小宽度避免切换选中项时抖动 */
+.weilin_prompt_ui_sort-trigger {
+  gap: 4px;
+  min-width: 106px;
+  justify-content: space-between;
+  padding: 0 8px 0 10px;
+}
+
+.weilin_prompt_ui_sort-caret {
+  fill: currentColor;
+  opacity: 0.75;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.weilin_prompt_ui_sort-caret.open {
+  transform: rotate(180deg);
+}
+
+/* 升降序按钮：稍窄，箭头放大加粗 */
+.weilin_prompt_ui_sort-dir {
+  min-width: 34px;
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 下拉面板（自绘，避免原生 select 吞掉页面下一次点击） */
+.weilin_prompt_ui_sort-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 132px;
+  padding: 4px;
+  z-index: 30;
+  border: 1px solid var(--weilin-prompt-ui-border-color);
+  border-radius: 6px;
+  background: var(--weilin-prompt-ui-primary-bg);
+  box-shadow: 0 6px 18px var(--weilin-prompt-ui-shadow-color);
+}
+
+.weilin_prompt_ui_sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--weilin-prompt-ui-primary-text);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.weilin_prompt_ui_sort-option:hover {
+  background: var(--weilin-prompt-ui-hover-bg-color);
+}
+
+.weilin_prompt_ui_sort-option.active {
+  color: var(--weilin-prompt-ui-primary-color);
+  font-weight: 600;
+}
+
+.weilin_prompt_ui_sort-check {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 
 .lora-manager-top-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
   margin-bottom: 10px;
 }
 
 /* 添加搜索框样式 */
 .weilin_prompt_ui_search-input {
-  flex: 1;
+  /* 与排序/图标/复选框同行：优先保持可用宽度，空间不足时由 top-bar 的 flex-wrap 换行 */
+  flex: 1 1 160px;
+  min-width: 140px;
   margin-right: 10px;
   padding: 6px 12px;
   border: 1px solid var(--weilin-prompt-ui-border-color);

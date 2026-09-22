@@ -4912,58 +4912,76 @@ const createDragGhost = () => {
   const container = tokensContainerRef.value;
   if (!container) return;
   const boxes = container.querySelectorAll('.token-item-box');
-  const indices = draggedTokens.value.length > 0 ? draggedTokens.value : [mouseDragState.startIndex];
+  const dragged = draggedTokens.value.length > 0 ? draggedTokens.value : [mouseDragState.startIndex];
+  // 多选拖拽只画「被按住的那一个」作为虚影，其余用 +N 角标表示：
+  // 原实现给每个选中标签各画一个 chip，框选十几二十个时虚影是一大片，观感很差
+  const primary = dragged.includes(mouseDragState.startIndex) ? mouseDragState.startIndex : dragged[0];
+  const extraCount = dragged.length - 1;
+  const src = boxes[primary];
+  if (!src) return;
+
+  // 所有被拖动的原标签都虚化（含未画进虚影的那些），搬运过程中列表里一眼能看出「哪些在动」
+  dragged.forEach(i => {
+    const el = boxes[i];
+    if (el) {
+      el.classList.add('weilin-dragging-src');
+      dragGhostSources.push(el);
+    }
+  });
+
   const ghost = document.createElement('div');
   ghost.className = 'weilin-drag-ghost';
-  indices.forEach(i => {
-    const src = boxes[i];
-    if (!src) return;
-    // 原标签虚化，克隆体作为虚影
-    src.classList.add('weilin-dragging-src');
-    dragGhostSources.push(src);
-    // 不能用 cloneNode：克隆体挂在 body 上拿不到 scoped 样式和主题 CSS 变量
-    // （背景/文字色全是 var(--weilin-*)，在 body 上解析为空 → 只剩裸文本）。
-    // 改为从原标签读取已解析的实际样式，以内联样式自绘虚影
-    const cs = getComputedStyle(src);
-    const token = tokens.value[i];
-    const chip = document.createElement('div');
-    // 虚影展示与标签一致：原文 + 译文（译文用同色降透明度——虚影挂在 body 上，
-    // 取不到主题 CSS 变量，无法直接使用次要文字色）
-    const mainText = !token || token.text === '\n' ? '↵' : (token.text === '\t' ? '→' : token.text);
-    const textEl = document.createElement('span');
-    textEl.textContent = mainText;
-    textEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
-    chip.appendChild(textEl);
-    const translateText = token && token.translate ? String(token.translate).trim() : '';
-    if (translateText) {
-      const trEl = document.createElement('span');
-      trEl.textContent = translateText;
-      // 译文另起一行、居中（与原文同列居中）
-      trEl.style.cssText = 'align-self:stretch;text-align:center;font-weight:400;opacity:0.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
-      chip.appendChild(trEl);
-    }
-    chip.style.cssText = [
-      'box-sizing:border-box',
-      'display:inline-flex',
-      'flex-direction:column',
-      'align-items:center',
-      'text-align:center',
-      'padding:3px 8px',
-      'border-radius:6px',
-      'font-size:' + cs.fontSize,
-      'line-height:' + cs.lineHeight,
-      'font-family:' + cs.fontFamily,
-      'font-weight:' + cs.fontWeight,
-      'color:' + cs.color,
-      'background-color:' + cs.backgroundColor,
-      'border:1px solid rgba(128,128,128,0.35)',
-      'white-space:nowrap',
-      'max-width:300px',
-      'overflow:hidden'
-    ].join(';');
-    ghost.appendChild(chip);
-  });
-  if (!ghost.children.length) return;
+
+  // 不能用 cloneNode：克隆体挂在 body 上拿不到 scoped 样式和主题 CSS 变量
+  // （背景/文字色全是 var(--weilin-*)，在 body 上解析为空 → 只剩裸文本）。
+  // 改为从原标签读取已解析的实际样式，以内联样式自绘虚影
+  const cs = getComputedStyle(src);
+  const token = tokens.value[primary];
+  const chip = document.createElement('div');
+  // 虚影展示与标签一致：原文 + 译文（译文用同色降透明度——虚影挂在 body 上，
+  // 取不到主题 CSS 变量，无法直接使用次要文字色）
+  const mainText = !token || token.text === '\n' ? '↵' : (token.text === '\t' ? '→' : token.text);
+  const textEl = document.createElement('span');
+  textEl.textContent = mainText;
+  textEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
+  chip.appendChild(textEl);
+  const translateText = token && token.translate ? String(token.translate).trim() : '';
+  if (translateText) {
+    const trEl = document.createElement('span');
+    trEl.textContent = translateText;
+    // 译文另起一行、居中（与原文同列居中）
+    trEl.style.cssText = 'align-self:stretch;text-align:center;font-weight:400;opacity:0.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
+    chip.appendChild(trEl);
+  }
+  chip.style.cssText = [
+    'box-sizing:border-box',
+    'display:inline-flex',
+    'flex-direction:column',
+    'align-items:center',
+    'text-align:center',
+    'padding:3px 8px',
+    'border-radius:6px',
+    'font-size:' + cs.fontSize,
+    'line-height:' + cs.lineHeight,
+    'font-family:' + cs.fontFamily,
+    'font-weight:' + cs.fontWeight,
+    'color:' + cs.color,
+    'background-color:' + cs.backgroundColor,
+    'border:1px solid rgba(128,128,128,0.35)',
+    'white-space:nowrap',
+    'max-width:300px',
+    'overflow:hidden'
+  ].join(';');
+  ghost.appendChild(chip);
+
+  // 其余选中项用右上角角标表示（+N）
+  if (extraCount > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'weilin-drag-ghost-badge';
+    badge.textContent = '+' + extraCount;
+    ghost.appendChild(badge);
+  }
+
   document.body.appendChild(ghost);
   dragGhostEl = ghost;
 };
@@ -5427,6 +5445,29 @@ defineExpose({
     pointer-events: none;
     opacity: 0.85;
     filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+}
+
+/* 多选拖拽时虚影右上角的「+N」角标：表示还有 N 个标签一起被搬运。
+   虚影挂在 body 上取不到 --weilin-* 主题变量，故用固定色（蓝底白字，明暗主题都清晰） */
+.weilin-drag-ghost-badge {
+    position: absolute;
+    top: -9px;
+    right: -9px;
+    box-sizing: border-box;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    background: #3b82f6;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 /* 拖拽期间强制统一光标（防止经过按钮/标签时光标样式变来变去） */

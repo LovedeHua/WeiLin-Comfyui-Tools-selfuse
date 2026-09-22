@@ -86,7 +86,12 @@ async def _get_lora_folder_list(request):
 @PromptServer.instance.routes.post(baseUrl+"get_lora_list_by_range")
 async def _get_lora_list_by_range(request):
     data = await request.json()
-    return web.json_response({"data": await get_rang_for_extra_networks(data["range"])})
+    rng = data.get("range", [])
+    sort_key = data.get("sort_key", "name")
+    sort_dir = data.get("sort_dir", "asc")
+    page = data.get("page", 1)
+    page_size = data.get("page_size", 50)
+    return web.json_response({"data": await get_rang_for_extra_networks(rng, sort_key, sort_dir, page, page_size)})
 
 
 @PromptServer.instance.routes.post(baseUrl+"get_lora_list_by_search")

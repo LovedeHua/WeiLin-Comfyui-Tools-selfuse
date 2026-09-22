@@ -100,12 +100,13 @@ export const loraApi = {
       method: 'post',
     })
   },
-  // 根据数组获取Lora具体信息
-  getLoraRangeList: async (range) => {
+  // 根据数组获取Lora具体信息（支持排序+分页：range 为完整路径数组，
+  // sort_key: name|size|mtime，sort_dir: asc|desc，page 从1起，page_size 每页条数）
+  getLoraRangeList: async (params) => {
     return await request({
       url: '/get_lora_list_by_range',
       method: 'post',
-      data:{ range }
+      data: params
     })
   },
   // 查询Lora返回相关信息
