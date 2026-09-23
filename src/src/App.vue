@@ -185,8 +185,14 @@ const isDark = ref(
 )
 // 取消 ComfyUI 主题监听的句柄
 let stopComfyThemeWatch = null
-// 全局提示词
-const globalPrompt = ref('')
+// 全局提示词（悬浮球 →「打开全局提示词」）
+// 持久化到 localStorage：此前它只存在这个内存 ref 里，刷新页面内容就丢了，
+// 再打开只会得到一个空白编辑窗口。值格式与节点一致（与 prompt_index 的
+// setPromptText 对应）：{prompt, lora, temp_prompt, temp_lora} 的 JSON 串。
+const GLOBAL_PROMPT_KEY = 'weilin_prompt_ui_global_prompt'
+// 空内容也要显式下发：setPromptText 对空串直接 return，不下发结构会残留上一个节点的提示词
+const EMPTY_PROMPT_JSON = JSON.stringify({ prompt: '', lora: '', temp_prompt: [], temp_lora: '' })
+const globalPrompt = ref(localStorage.getItem(GLOBAL_PROMPT_KEY) || '')
 
 // 检查版本更新
 const showVersionUpdate = ref(false);
@@ -941,8 +947,12 @@ const handleMessage = (event) => {
     thisEditPromptId.value = "global"
     windows.value.prompt.visible = true
     hasPromptLoraStack.value = false
+    // 取持久化的内容并显式下发：空内容用 EMPTY_PROMPT_JSON，
+    // 否则 setPromptText 会因空串直接 return，残留上一个节点的提示词
+    const storedGlobalPrompt = localStorage.getItem(GLOBAL_PROMPT_KEY) || ''
+    globalPrompt.value = storedGlobalPrompt
     nextTick(() => {
-      promptBoxRef.value.setPromptText(globalPrompt.value)
+      promptBoxRef.value.setPromptText(storedGlobalPrompt || EMPTY_PROMPT_JSON)
     })
     windowManager.openWindowOnTop('promptBox')
   } else if (event.data.type === 'weilin_prompt_ui_open_global_tag_manager') {
@@ -954,7 +964,16 @@ const handleMessage = (event) => {
     windows.value.lora.visible = true
     windowManager.openWindowOnTop('loraManager')
   } else if (event.data.type === 'weilin_prompt_ui_prompt_update_prompt_global') {
-    globalPrompt.value = event.data.data
+    // 全局提示词：只接受非空字符串，避免把 undefined 存成字面量 "undefined"
+    // （那会让下次打开时 JSON.parse 失败）
+    if (typeof event.data.data === 'string' && event.data.data.length > 0) {
+      globalPrompt.value = event.data.data
+      try {
+        localStorage.setItem(GLOBAL_PROMPT_KEY, event.data.data)
+      } catch (e) {
+        console.warn('[WeiLin] 全局提示词保存失败（localStorage 不可用？）:', e)
+      }
+    }
   } else if (event.data.type === 'weilin_prompt_ui_floating_ball_setting') {
     isFloatingBallEnabled.value = localStorage.getItem('weilin_prompt_ui_floatingBallEnabled') === 'true';
   } else if (event.data.type === 'weilin_prompt_ui_restore_window') {
