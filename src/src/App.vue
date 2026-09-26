@@ -6,7 +6,8 @@
       :position="windows.prompt.position" :size="windows.prompt.size" :z-index="windowManager.getZIndex('promptBox')"
       @update:position="updatePosition('prompt', $event)" @update:size="updateSize('prompt', $event)"
  @close="closeWindow('prompt')">
-      <PromptBox :promptManager="promptManager" :hasPromptLoraStack="hasPromptLoraStack" ref="promptBoxRef"
+      <PromptBox :promptManager="promptManager" :hasPromptLoraStack="hasPromptLoraStack"
+        :autoFitOnOpen="!promptSizeUserSized" ref="promptBoxRef"
         @request-window-size="onPromptRequestWindowSize" />
     </DraggableWindow>
 
@@ -725,10 +726,28 @@ const updatePosition = (windowName, newPosition) => {
   }
 }
 
+// 提示词窗口是否被用户手动调整过大小（持久化）。
+// 74.88 的「打开时自动收缩贴合内容」只应在用户没手动调过时生效——
+// 否则每次打开都会把用户拖出来的尺寸覆盖掉（表现为「关闭再打开，尺寸被初始化」）。
+const PROMPT_SIZE_USER_SIZED_KEY = `${STORAGE_PREFIX}prompt_size_user_sized`
+const promptSizeUserSized = ref(localStorage.getItem(PROMPT_SIZE_USER_SIZED_KEY) === '1')
+const markPromptSizeUserSized = () => {
+  if (promptSizeUserSized.value) return
+  promptSizeUserSized.value = true
+  try {
+    localStorage.setItem(PROMPT_SIZE_USER_SIZED_KEY, '1')
+  } catch (e) {
+    console.warn('[WeiLin] 提示词窗口尺寸标记保存失败:', e)
+  }
+}
+
 // 更新窗口大小
 const updateSize = (windowName, newSize) => {
   if (windows.value[windowName]) {
     windows.value[windowName].size = { ...newSize }
+    // 只有用户拖拽 resize 会走到这里（DraggableWindow 仅在 handleResize 里 emit update:size），
+    // 自动收缩走的是 onPromptRequestWindowSize，两者互不干扰
+    if (windowName === 'prompt') markPromptSizeUserSized()
   }
 }
 
@@ -821,6 +840,11 @@ const restoreWindowsToDefault = () => {
 
   localStorage.setItem(`${STORAGE_PREFIX}windowStates`, JSON.stringify(DEFAULT_GOL_WINDOWS))
   localStorage.setItem(`${STORAGE_PREFIX}loraDetailState`, JSON.stringify(LORA_DETAIL_WINDOWS))
+  // 复原尺寸 = 用户主动放弃自定义尺寸 → 清掉标记，恢复「打开时自动收缩贴合内容」的默认行为
+  promptSizeUserSized.value = false
+  try {
+    localStorage.removeItem(PROMPT_SIZE_USER_SIZED_KEY)
+  } catch (e) { /* ignore */ }
 
   windows.value = getInitialWindowState()
 };

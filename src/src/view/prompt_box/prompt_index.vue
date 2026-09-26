@@ -801,6 +801,13 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  // 窗口尺寸是否「尚未被用户手动调整过」（由 App 传入）。
+  // 只有 true 时才在打开时自动收缩贴合内容——否则每次打开都会把用户拖出来的
+  // 尺寸覆盖成内容高度（表现为「关闭再打开，尺寸被初始化」）。
+  autoFitOnOpen: {
+    type: Boolean,
+    default: true
+  },
 })
 
 const parentCneterBox = ref(null)
@@ -3103,8 +3110,11 @@ watch(showLoraManager, async (visible) => {
 // 74.88 补：窗口打开时 Lora 固定是收起态（showLoraManager 不持久化，默认 false），
 // 而保存的窗口尺寸可能是上次展开时的大尺寸 → 打开后内容不满、底部空白。
 // 等首帧渲染稳定后自适应一次；分类/chips 是异步渲染，延迟再做一次兜底。
+// 前提：用户没有手动调整过这个窗口的大小（autoFitOnOpen，由 App 传入）。
+// 手动调过就以用户尺寸为准——否则每次打开都会被收缩覆盖，尺寸"被初始化"。
 onMounted(() => {
   if (showLoraManager.value || !canAutoFitWindow.value) return
+  if (!props.autoFitOnOpen) return
   const run = () => {
     if (!showLoraManager.value) fitWindowToCollapsedContent()
   }
