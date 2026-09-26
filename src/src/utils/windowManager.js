@@ -95,7 +95,13 @@ export const windowManager = {
 
   // 注册窗口：新窗口排在激活栈顶，并自动获得焦点（打开即激活）
   registerWindow(windowName) {
-    if (!stackOrder.value.includes(windowName)) {
+    // 已注册的窗口会再次走到这里：组件的 onMounted 也会 registerWindow 一次，
+    // 而挂载时机取决于 Vue 的渲染 flush，可能晚于用户随后打开的其它窗口。
+    // 因此只有「真正新打开」时才抢占激活态——否则晚到的挂载会把焦点从用户
+    // 正在使用的窗口抢回去（表现为「打开 A 后立刻打开 B，焦点又回溯到 A」，
+    // 随后关闭 B 时因 activeWindow 已不等于 B，交接分支被跳过，焦点不落回 A）。
+    const isNewOpen = !stackOrder.value.includes(windowName)
+    if (isNewOpen) {
       stackOrder.value = [...stackOrder.value, windowName]
     }
     if (windowZIndexes.value[windowName] === undefined) {
@@ -105,7 +111,9 @@ export const windowManager = {
     if (pinnedMemory.value.has(windowName)) {
       pinnedWindows.value.add(windowName)
     }
-    activeWindow.value = windowName
+    if (isNewOpen) {
+      activeWindow.value = windowName
+    }
     recomputeZIndexes()
   },
 

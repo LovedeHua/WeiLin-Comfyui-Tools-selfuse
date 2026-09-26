@@ -415,7 +415,14 @@ const handleHeaderContextMenu = (event) => {
   transform: rotate(45deg);
 }
 
-/* 焦点窗口：在标题栏处指示（仅标题文字变主色） */
+/* 焦点窗口：标题文字变主色 + 窗口外框加一圈主色描边。
+   原先只有标题变色这一条指示，太隐蔽——窗口来回开关后根本看不出焦点落在哪个窗口，
+   容易被当成「焦点没回来」。用 box-shadow 而非 outline/border：不占布局、不改变窗口尺寸。 */
+.weilin_prompt_ui_draggable-window.is-active-window {
+  box-shadow: 0 0 0 2px var(--weilin-prompt-ui-primary-color), 0 2px 12px 0 var(--weilin-prompt-ui-shadow-color);
+}
+
+/* 焦点窗口：在标题栏处指示（标题文字变主色） */
 .weilin_prompt_ui_draggable-window.is-active-window .weilin_prompt_ui_window-title {
   color: var(--weilin-prompt-ui-primary-color);
 }
