@@ -3554,7 +3554,9 @@ const applySelectedStyle = () => {
 
 // 标签上右键：屏蔽浏览器菜单，弹出与框选后一致的操作菜单（复制/禁用/启用/删除）
 // 修饰键扩展（资源管理器多选同款语义）：
-//   Ctrl+右键：多选开关——未选中则加入选中，已选中则从选中移除；不弹菜单
+//   Ctrl+右键：多选开关——未选中则加入选中，已选中则从选中移除；开关后同样弹菜单
+//              （否则 Ctrl 多选出来的集合没有任何入口能操作它：无修饰右键会替换选中，
+//                Shift+右键会重算范围，等于死路）
 //   Shift+右键：范围框选——选中「起始目标标签（锚点）~ 当前标签」之间的所有标签，并弹菜单
 //   无修饰键：单选该标签并弹菜单；右键已选中标签则整体取消框选（开关式，不弹菜单）
 const handleTokenContextMenu = (index, event) => {
@@ -3565,12 +3567,8 @@ const handleTokenContextMenu = (index, event) => {
   }
   event.preventDefault();
 
-  // Ctrl(+Cmd)+右键：多选开关（不弹菜单；若操作菜单开着则先关闭）
+  // Ctrl(+Cmd)+右键：多选开关 + 弹菜单（菜单位置跟随光标）
   if (event.ctrlKey || event.metaKey) {
-    if (showSelectionActions.value) {
-      showSelectionActions.value = false;
-      document.removeEventListener('click', closeSelectionActionsOnClickOutside);
-    }
     const pos = selectedTokens.value.indexOf(index);
     if (pos === -1) {
       // 未选中 → 加入选中（保持索引升序，与框选结果一致）
@@ -3581,6 +3579,23 @@ const handleTokenContextMenu = (index, event) => {
       selectedTokens.value = selectedTokens.value.filter(v => v !== index);
     }
     nextTick(() => applySelectedStyle());
+
+    if (selectedTokens.value.length > 0) {
+      // 与无修饰右键一致：弹在光标下方
+      selectionActionsPosition.value = {
+        top: `${event.clientY + 8}px`,
+        left: `${event.clientX}px`
+      };
+      showSelectionActions.value = true;
+      document.removeEventListener('click', closeSelectionActionsOnClickOutside);
+      setTimeout(() => {
+        document.addEventListener('click', closeSelectionActionsOnClickOutside);
+      }, 0);
+    } else {
+      // 取消到空集后菜单无事可做，直接收起
+      showSelectionActions.value = false;
+      document.removeEventListener('click', closeSelectionActionsOnClickOutside);
+    }
     return;
   }
 
