@@ -69,14 +69,27 @@ function getCacheVersion() {
   return encodeURIComponent(global_randomID);
 }
 
+// 程序化写入控件值时的自有同步事件（只在插件内部流转）。
+// 不能用 input/change：这两个事件代表「用户正在输入」，页面上其它扩展会据此接管。
+// 例如 Autocomplete+++ 会给每个 textarea 绑 input 监听并把它当作编辑目标，于是本节点
+// 隐藏的备份 textarea（positive / lora_str / temp_str / temp_lora_str）一旦被派发 input，
+// 补全目标就被抢过去：在那边以 JSON 尾巴为词搜索 → 0 个候选 → 渲染空结果 → 关掉弹窗，
+// 表现就是提示词窗口里「候选刚出现就被清掉」。
+const WIDGET_SYNC_EVENT = 'weilin-widget-value-sync';
+
 function setWidgetValue(widget, value) {
   if (!widget) return;
 
   widget.value = value;
-  if (widget.element) {
-    widget.element.value = value;
-    widget.element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-    widget.element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+  const element = widget.element;
+  if (element) {
+    element.value = value;
+    if (element.tagName === 'TEXTAREA') {
+      element.dispatchEvent(new CustomEvent(WIDGET_SYNC_EVENT, { bubbles: true }));
+    } else {
+      element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    }
   }
 
   app.graph?.setDirtyCanvas?.(true, true);
@@ -467,14 +480,18 @@ app.registerExtension({
 
           const textarea = nodeTextAreaList[0];
 
-          textarea.addEventListener('input', (event) => {
+          const syncNodeTextFromElement = (event) => {
             const newValue = event.target.value;
             if (positiveWidget) {
               positiveWidget.value = newValue;
             }
             updateNodeTextBySeed(thisNodeSeed, newValue);
             window.parent.postMessage({ type: 'weilin_prompt_ui_update_node_list_info', nodeList: globalNodeList }, '*')
-          });
+          };
+          // 用户直接在节点文本框里编辑 → 原生 input；提示词窗口回写 → 自有同步事件
+          // （setWidgetValue 不再对 textarea 派发 input，避免被外部补全扩展当成用户输入）
+          textarea.addEventListener('input', syncNodeTextFromElement);
+          textarea.addEventListener(WIDGET_SYNC_EVENT, syncNodeTextFromElement);
         }
 
         // 监听节点ID
