@@ -1825,22 +1825,28 @@ const handleInput = (event) => {
   });
 
   // 2. 直接更新输入框值
+  // 注意：v-model 的 runtime 指令监听是在模板 @input 之后才 addEventListener 的，
+  // 所以这里必须同步一次 v-model 源，不能因为「没有转换」就跳过。
   inputText.value = processedValue;
 
-  // 3. 立即计算并设置新的光标位置
-  // 使用转换后的beforeCursor长度作为新的光标位置
+  // 3. 只有文本真的被改写（全角→半角等）时才重设光标并抢焦点。
+  // 无改写时绝不碰 value/selection/focus：input 之后仍有其它扩展在跑（如 Autocomplete+++
+  // 会在异步搜索期间校验 target.value 与 selectionStart 是否与发起时一致），
+  // 任何多余的重设都会让它们的结果被判定为过期，表现为候选刚浮出就消失。
+  const valueChanged = processedValue !== originalValue;
   const newCursorPosition = beforeCursor.length;
   const selectionDiff = cursorEnd - cursorPosition;
   const newCursorEnd = newCursorPosition + selectionDiff;
 
-  // 确保DOM更新后立即设置光标位置
-  nextTick(() => {
-    if (inputAreaRef.value) {
-      inputAreaRef.value.setSelectionRange(newCursorPosition, newCursorEnd);
-      // 确保输入框获得焦点
-      inputAreaRef.value.focus();
-    }
-  });
+  if (valueChanged) {
+    nextTick(() => {
+      if (inputAreaRef.value) {
+        inputAreaRef.value.setSelectionRange(newCursorPosition, newCursorEnd);
+        // 确保输入框获得焦点
+        inputAreaRef.value.focus();
+      }
+    });
+  }
 
   // 4. 精确获取当前输入内容用于补全
   const textBeforeCursor = processedValue.substring(0, newCursorPosition);
