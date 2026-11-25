@@ -173,7 +173,7 @@
 
 
 
-        <SettingDialog ref="settingDialog" />
+        <SettingDialog ref="settingDialog" @functionTogglesUpdated="onFunctionTogglesUpdated" />
 
       </div>
 
@@ -1227,6 +1227,8 @@ let confirmDialogCallback = null
 
 
 // 功能开关状态变量 - 从localStorage读取初始值，默认值都为true
+// 自动补全总开关：仅作用于本提示词编辑框的输入补全浮窗（不影响标签搜索建议/收藏夹/标签管理等）
+const isAutocompleteEnabled = ref(localStorage.getItem('weilin_function_toggles_autocomplete') !== 'false');
 const isClearAllEnabled = ref(localStorage.getItem('weilin_function_toggles_clearAll') !== 'false');
 const isDeleteButtonEnabled = ref(localStorage.getItem('weilin_function_toggles_deleteButton') !== 'false');
 const isRandomTagEnabled = ref(localStorage.getItem('weilin_function_toggles_randomTag') !== 'false');
@@ -1249,9 +1251,27 @@ watch([isClearAllEnabled, isDeleteButtonEnabled, isRandomTagEnabled, isRandomTag
   }
 );
 
+// 自动补全总开关：变化即持久化；关闭时立刻收起已弹出的补全浮窗并作废在途请求。
+// 注意：是否弹补全的判定以 isAutocompleteDisabled()（实时读 localStorage）为准，
+// 这里的 ref 只作为「开关被切换」的信号源，用于关闭瞬间的即时清理。
+watch(isAutocompleteEnabled, (enabled) => {
+  localStorage.setItem('weilin_function_toggles_autocomplete', String(enabled));
+  if (!enabled) {
+    showAutocomplete.value = false;
+    autocompleteResults.value = [];
+    autocompleteRequestSeq++; // 使在途响应失效，避免关闭后仍弹窗
+    if (autocompleteDebounceTimer) {
+      clearTimeout(autocompleteDebounceTimer);
+      autocompleteDebounceTimer = null;
+    }
+  }
+});
+
 // 监听功能开关设置的存储变化
 const handleFunctionTogglesStorageChange = (e) => {
-  if (e.key === 'weilin_function_toggles_clearAll') {
+  if (e.key === 'weilin_function_toggles_autocomplete') {
+    isAutocompleteEnabled.value = e.newValue !== 'false';
+  } else if (e.key === 'weilin_function_toggles_clearAll') {
     isClearAllEnabled.value = e.newValue !== 'false';
   } else if (e.key === 'weilin_function_toggles_deleteButton') {
     isDeleteButtonEnabled.value = e.newValue !== 'false';
@@ -1269,6 +1289,14 @@ const handleFunctionTogglesStorageChange = (e) => {
     try {
       window.parent.postMessage({ type: 'weilin_prompt_ui_auto_random_toggle' }, '*');
     } catch (err) { /* 忽略跨域异常 */ }
+  }
+};
+
+// 设置对话框保存功能开关后同步（同一文档内写 localStorage 不会触发 storage 事件，必须走 emit）
+const onFunctionTogglesUpdated = (payload) => {
+  if (!payload) return;
+  if (typeof payload.autocomplete === 'boolean') {
+    isAutocompleteEnabled.value = payload.autocomplete;
   }
 };
 
@@ -4303,7 +4331,24 @@ const applyAutocompleteResults = async (results) => {
   selectedAutocompleteIndex.value = 0; // 重置选中索引
 }
 
+// 自动补全总开关的权威判据：直接读 localStorage。
+// 设置对话框保存后同一文档不会触发 storage 事件（只看 ref 会滞后），实时读保证立即生效；
+// 该开关影响「除搜索框以外」的所有补全（本编辑框输入补全、收藏夹标签编辑框补全），
+// 标签搜索栏的搜索建议不受影响。
+const isAutocompleteDisabled = () => localStorage.getItem('weilin_function_toggles_autocomplete') === 'false';
+
 const triggerAutocomplete = (inputValue) => {
+  // 自动补全总开关关闭：不请求、不展示候选（搜索框的补全不受此开关影响）
+  if (isAutocompleteDisabled()) {
+    if (autocompleteDebounceTimer) {
+      clearTimeout(autocompleteDebounceTimer);
+      autocompleteDebounceTimer = null;
+    }
+    autocompleteRequestSeq++; // 作废在途请求，避免关闭后迟到的响应把弹窗又打开
+    showAutocomplete.value = false;
+    return;
+  }
+
   // 处理特殊格式 - 移除了圆括号
   let cleanedTrSegment = inputValue.replace(/[\[\]{}]/g, '').trim();
 

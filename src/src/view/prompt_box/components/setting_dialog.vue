@@ -189,6 +189,12 @@
           <div class="weilin-comfyui-floating-ball-settings">
             <div class="weilin-comfyui-setting-item">
               <label>
+                <input type="checkbox" v-model="isAutocompleteEnabled" />
+                {{ t('promptBox.settings.enableAutocomplete') }}
+              </label>
+            </div>
+            <div class="weilin-comfyui-setting-item">
+              <label>
                 <input type="checkbox" v-model="isClearAllEnabled" />
                 {{ t('promptBox.settings.enableClearAll') }}
               </label>
@@ -510,6 +516,8 @@ const isBracketEscapeEnabled = ref(localStorage.getItem('weilin_prompt_ui_bracke
 const isTagTipsEnabled = ref(localStorage.getItem('weilin_prompt_ui_tag_tips') !== 'false');
 
 // 功能开关状态
+// 自动补全（仅作用于提示词编辑框的输入补全浮窗；标签搜索建议等不受影响），默认true
+const isAutocompleteEnabled = ref(localStorage.getItem('weilin_function_toggles_autocomplete') !== 'false');
 const isClearAllEnabled = ref(localStorage.getItem('weilin_function_toggles_clearAll') !== 'false'); // 默认true
 const isDeleteButtonEnabled = ref(localStorage.getItem('weilin_function_toggles_deleteButton') !== 'false'); // 默认true
 const isRandomTagEnabled = ref(localStorage.getItem('weilin_function_toggles_randomTag') !== 'false'); // 默认true
@@ -601,6 +609,7 @@ const saveTranslatorSettings = () => {
 
 // 保存功能开关设置
 const saveFunctionToggles = () => {
+  localStorage.setItem('weilin_function_toggles_autocomplete', isAutocompleteEnabled.value);
   localStorage.setItem('weilin_function_toggles_clearAll', isClearAllEnabled.value);
   localStorage.setItem('weilin_function_toggles_deleteButton', isDeleteButtonEnabled.value);
   localStorage.setItem('weilin_function_toggles_randomTag', isRandomTagEnabled.value);
@@ -611,6 +620,7 @@ const saveFunctionToggles = () => {
 
   // 通知父组件更新功能开关状态
   emit('functionTogglesUpdated', {
+    autocomplete: isAutocompleteEnabled.value,
     clearAll: isClearAllEnabled.value,
     deleteButton: isDeleteButtonEnabled.value,
     randomTag: isRandomTagEnabled.value,
@@ -1001,6 +1011,8 @@ const openDialog = () => {
   isAngleBracketConversionEnabled.value = localStorage.getItem('weilin_prompt_ui_angle_bracket_conversion') === 'true';
   isUnderscoreToBracketEnabled.value = localStorage.getItem('weilin_prompt_ui_underscore_to_bracket') === 'true';
   isCommaCloseAutocompleteEnabled.value = localStorage.getItem('weilin_prompt_ui_comma_close_autocomplete') === 'true';
+  // 功能开关每次打开设置都重读，避免在别处（其它窗口/标签页）改过之后显示旧状态
+  isAutocompleteEnabled.value = localStorage.getItem('weilin_function_toggles_autocomplete') !== 'false';
   isBracketEscapeEnabled.value = localStorage.getItem('weilin_prompt_ui_bracket_escape') === 'true';
   isTagTipsEnabled.value = localStorage.getItem('weilin_prompt_ui_tag_tips') !== 'false';
 

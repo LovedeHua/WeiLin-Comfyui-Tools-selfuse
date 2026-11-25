@@ -56,6 +56,7 @@ export default {
             setting_prompt_box: 'Setting Prompt Box',
             setting_function_toggles: 'Function Toggle Settings',
             setting_function_toggles_full: 'Function Toggle Settings (Reopen window to take effect)',
+            enableAutocomplete: 'Enable autocomplete (prompt editor only: show suggestions while typing)',
             enableClearDisabled: 'Enable Clear Disabled',
             disableAutoRandom: 'Hide the auto_random switch on nodes',
             disableAutoRandomDesc: 'When enabled: hides the auto_random widget on nodes and forces it off. Any auto_random=true left in saved workflows is treated as false at execution time. This only affects that widget — the random tag features in the toolbar are unaffected. Reload the page (Ctrl+R) after saving.',

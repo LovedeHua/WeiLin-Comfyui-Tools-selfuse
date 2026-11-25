@@ -539,6 +539,19 @@ const scrollToSelected = () => {
 }
 
 const triggerAutocomplete = (rawWord) => {
+    // 自动补全总开关（设置 → 功能开关）：关闭后标签编辑框也不再弹补全。
+    // 直接读 localStorage——设置对话框与收藏夹窗口同文档，写 localStorage 不会触发 storage 事件，
+    // 只看本组件快照会滞后；实时读保证保存后立刻生效（搜索框的补全不受此开关影响）。
+    if (localStorage.getItem('weilin_function_toggles_autocomplete') === 'false') {
+        if (autocompleteTimer) {
+            clearTimeout(autocompleteTimer)
+            autocompleteTimer = null
+        }
+        autocompleteSeq++
+        showAutocomplete.value = false
+        return
+    }
+
     let cleaned = rawWord.replace(/[\[\]{}]/g, '').trim()
 
     // embedding 前缀检测必须在 extractText 之前（权重正则会截断数字开头的 embedding 名）；

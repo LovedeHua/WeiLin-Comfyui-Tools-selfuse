@@ -48,6 +48,7 @@ export default {
             auto_detect: '自动检测',
             setting_function_toggles: '功能开关设置',
             setting_function_toggles_full: '功能开关设置（保存后重新打开窗口生效）',
+            enableAutocomplete: '启用自动补全（仅提示词编辑框：输入时弹出补全列表）',
             enableClearAll: '启用一键清空所有',
             enableDeleteButton: '启用删除按钮显示开关',
             enableRandomTag: '启用一键随机标签',
